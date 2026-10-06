@@ -1,3 +1,4 @@
+const admin = location.pathname === '/admin' || location.pathname === '/admin/';
 const $ = id => document.getElementById(id);
 let action = 'in', state = {people: [], events: []}, todayEvents = [], busy = false, zone = 'Asia/Manila';
 const esc = value => String(value).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -6,6 +7,7 @@ const time = timestamp => new Date(timestamp).toLocaleTimeString('en-PH',{timeZo
 async function api(path, body) {
   const response = await fetch(path, body ? {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)} : {});
   const data = await response.json();
+  if(response.status===401 && admin && path !== '/api/scan') location.replace('/admin');
   if (!response.ok) throw new Error(data.error || 'Request failed');
   return data;
 }
@@ -15,10 +17,11 @@ function directory() {
   $('directory').innerHTML = people.length ? people.map(p=>`<div class="person"><span class="avatar">${esc(initials(p.name))}</span><div class="details"><b>${esc(p.name)}</b><small>${esc(p.barcode)}</small></div><span class="badge ${p.status==='out'?'out':''}">${p.status==='in'?'In':'Out'}</span></div>`).join('') : '<p class="empty">No people found. Add a person or import your team.</p>';
 }
 function render() {
-  $('total').textContent = state.people.length;
-  $('inside').textContent = state.people.filter(p=>p.status==='in').length;
-  $('scans').textContent = todayEvents.length;
+  $('total').textContent = admin ? state.people.length : state.total;
+  $('inside').textContent = admin ? state.people.filter(p=>p.status==='in').length : state.inside;
+  $('scans').textContent = admin ? todayEvents.length : state.scans;
   $('recent').innerHTML = todayEvents.length ? todayEvents.slice(0,8).map(e=>`<div class="activity"><span class="avatar">${esc(initials(e.name))}</span><div class="details"><b>${esc(e.name)}</b><small>Barcode ${esc(e.barcode)}</small></div><span class="badge ${e.action==='out'?'out':''}">Time ${e.action==='in'?'In':'Out'}</span><time>${time(e.timestamp)}</time></div>`).join('') : '<p class="empty">A fresh start.<br>Today’s scans will appear here.</p>';
+  if(!admin) return;
   $('records-body').innerHTML = state.events.map(e=>`<tr><td>${esc(e.name)}</td><td>${esc(e.barcode)}</td><td><span class="badge ${e.action==='out'?'out':''}">Time ${e.action==='in'?'In':'Out'}</span></td><td>${time(e.timestamp)}</td></tr>`).join('');
   $('records-empty').hidden = state.events.length > 0;
   $('export').href = '/api/export?date='+encodeURIComponent($('date').value);
@@ -27,6 +30,10 @@ function render() {
 }
 async function refresh() {
   try {
+    if(!admin) {
+      state=await api('/api/desk');zone=state.timezone;todayEvents=state.events;
+      render();$('connection').textContent='Connected';$('global-message').textContent='';return;
+    }
     const selected = $('date').value;
     state = await api('/api/state'+(selected?'?date='+encodeURIComponent(selected):''));
     zone = state.timezone;
@@ -70,7 +77,7 @@ $('scan-form').addEventListener('submit',async event=>{
     $('barcode').select();
   } finally {busy=false;$('scan-submit').disabled=false;$('barcode').focus();}
 });
-$('person-form').addEventListener('submit',async event=>{
+if(admin) $('person-form').addEventListener('submit',async event=>{
   event.preventDefault();
   const button=event.currentTarget.querySelector('button');button.disabled=true;
   try {
@@ -97,7 +104,7 @@ function parseCSV(text) {
   if(name<0)throw new Error('CSV must include a name column.');
   return rows.map(r=>({name:r[name]||'',barcode:barcode<0?'':r[barcode]||''}));
 }
-$('import').addEventListener('change',async()=>{
+if(admin) $('import').addEventListener('change',async()=>{
   const file=$('import').files[0];if(!file)return;
   $('import').disabled=true;
   try {
@@ -117,14 +124,18 @@ function barcodeSVG(value) {
   }
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${x+12} 50" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Barcode ${esc(value)}">${bars}</svg>`;
 }
-$('print').addEventListener('click',()=>{
+if(admin) $('print').addEventListener('click',()=>{
   const query=$('search').value.trim().toLowerCase();
   const people=state.people.filter(p=>p.name.toLowerCase().includes(query)||p.barcode.includes(query));
   if(!people.length){$('people-message').textContent='Add people before printing badges.';return;}
   $('badges').innerHTML=people.map(p=>`<article class="print-badge"><small>CLOCKWORK · ATTENDANCE</small><h3>${esc(p.name)}</h3>${barcodeSVG(p.barcode)}<p>${esc(p.barcode)}</p></article>`).join('');
   window.print();
 });
-$('search').addEventListener('input',directory);
-$('date').addEventListener('change',refresh);
+if(admin) $('search').addEventListener('input',directory);
+if(admin) $('date').addEventListener('change',refresh);
+if(admin) $('logout').addEventListener('click',async()=>{
+  try {await api('/api/logout',{});location.replace('/');}
+  catch(e){$('global-message').textContent='Could not log out: '+e.message;}
+});
 function clock(){ $('clock').textContent=new Date().toLocaleString('en-PH',{timeZone:zone,month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'}); }
 clock();setInterval(clock,1000);refresh();setInterval(refresh,10000);$('barcode').focus();
