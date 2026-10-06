@@ -128,7 +128,7 @@ if(admin) $('print').addEventListener('click',()=>{
   const query=$('search').value.trim().toLowerCase();
   const people=state.people.filter(p=>p.name.toLowerCase().includes(query)||p.barcode.includes(query));
   if(!people.length){$('people-message').textContent='Add people before printing badges.';return;}
-  $('badges').innerHTML=people.map(p=>`<article class="print-badge"><small>CLOCKWORK · ATTENDANCE</small><h3>${esc(p.name)}</h3>${barcodeSVG(p.barcode)}<p>${esc(p.barcode)}</p></article>`).join('');
+  $('badges').innerHTML=people.map(p=>`<article class="print-badge"><small>Cavite Nagano Seiko Inc. · ATTENDANCE</small><h3>${esc(p.name)}</h3>${barcodeSVG(p.barcode)}<p>${esc(p.barcode)}</p></article>`).join('');
   window.print();
 });
 if(admin) $('search').addEventListener('input',directory);
@@ -137,5 +137,9 @@ if(admin) $('logout').addEventListener('click',async()=>{
   try {await api('/api/logout',{});location.replace('/');}
   catch(e){$('global-message').textContent='Could not log out: '+e.message;}
 });
-function clock(){ $('clock').textContent=new Date().toLocaleString('en-PH',{timeZone:zone,month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'}); }
+function clock(){
+  const now=new Date();
+  $('clock').textContent=now.toLocaleTimeString('en-PH',{timeZone:zone,hour:'2-digit',minute:'2-digit',second:'2-digit'});
+  $('clock-date').textContent=now.toLocaleDateString('en-PH',{timeZone:zone,weekday:'long',month:'long',day:'numeric',year:'numeric'});
+}
 clock();setInterval(clock,1000);refresh();setInterval(refresh,10000);$('barcode').focus();

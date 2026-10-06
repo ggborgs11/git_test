@@ -1,4 +1,4 @@
-# Clockwork attendance
+# Cavite Nagano Seiko Inc. attendance
 
 A simple barcode attendance web app for a 300-person team. Uses Python 3.12+ and SQLite. Windows also needs the `tzdata` package.
 
