@@ -71,9 +71,10 @@ async function processScans(){
     try {
       const result=await api('/api/scan',{barcode});
       $('scan-message').className=result.duplicate?'duplicate':'success';
-      $('scan-message').textContent=result.duplicate
-        ? `${result.name} · Duplicate scan ignored. Still ${result.action==='in'?'In':'Out'}. Scan again after ${result.retry_after} seconds.`
-        : `✓ ${result.name} · Time ${result.action==='in'?'In':'Out'} · ${time(result.timestamp)}`;
+      const label=result.action==='in'?'Time In':'Time Out';
+      $('scan-message').innerHTML=result.duplicate
+        ? `<strong class="scan-duplicate">Duplicate scan ignored</strong><span class="scan-person">${esc(result.name)} · Still ${result.action==='in'?'In':'Out'}</span><span class="scan-result-time">Scan again after ${result.retry_after} seconds.</span>`
+        : `<strong class="scan-action">${label}</strong><span class="scan-person">${esc(result.name)}</span><time class="scan-result-time">${time(result.timestamp)}</time>`;
       await refresh();
     } catch(e) {
       $('scan-message').className='error';
