@@ -27,7 +27,7 @@ Open `http://127.0.0.1:8000` in the browser on the same computer. For a trusted 
 
 1. Sign in at `/admin`, then open **People & badges**, add people individually or upload CSV with `name,barcode` headers. Omit barcode values to generate unique numbers. Existing barcodes must contain 1–20 digits; leading zeros are preserved. Imports are atomic: an invalid or duplicate entry rejects the entire batch.
 2. Print badges. The current search filters the badges to print. Badges use Code 39; enable Code 39 on your scanner. Disable transmission of the start/stop asterisks, and configure the scanner to send Enter after each scan. Print at actual size and verify one badge with the physical scanner before printing all 300.
-3. At **Scan desk**, select **Time In** or **Time Out**, keep the barcode field focused, and scan. Manual barcode entry works too. Successful scans clear the field. Duplicate actions are rejected. The latest state persists across days; a missed Time Out must be recorded before another Time In.
+3. At **Scan desk**, scan your badge. No Time In/Out selection is needed. A person who is Out (or has no records) is timed in; a person who is In is timed out. The scanner must send Enter after each scan. The field clears and stays focused on the public screen. Manual barcode entry followed by Enter also works. Repeat scans of the same person within 30 seconds are ignored without changing status. Other people can scan immediately. The 30-second window is checked on the server and persists across restarts. Status carries across midnight for overnight shifts; there is no scheduled automatic Time Out. A missed scan can leave the next action incorrect, so review unmatched attendance before using scan-only mode. This version does not include an admin attendance correction tool.
 4. Select a date in **Attendance records** and export CSV. The scan desk always shows today's activity and current attendance. Other browsers refresh every 10 seconds.
 
 Attendance uses server timestamps, stored in UTC and displayed in **Asia/Manila**. Set `ATTENDANCE_TIMEZONE` to another IANA timezone before starting if needed. Keep the server clock accurate.
@@ -49,4 +49,4 @@ python3 -m unittest discover -s tests -v
 node --check static/app.js
 ```
 
-Tests cover 300 people, duplicate suppression, concurrent scans, atomic import, unknown barcodes, Time Out prerequisites, leading zeros, and Manila date boundaries. Physical scanner and printer verification require your devices.
+Tests cover 300 people, automatic In/Out transitions, the 30-second duplicate window, concurrent scans, restart persistence, atomic import, unknown barcodes, leading zeros, and Manila date boundaries. Access tests cover admin login/logout, session expiry, protected APIs, and the public kiosk. Physical scanner and printer verification require your devices.

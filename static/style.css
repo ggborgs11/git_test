@@ -33,3 +33,7 @@ main{padding-top:12px}nav{margin-top:0}
 #desk>.stats{margin:18px 0 0}
 @media(min-width:901px) and (max-width:1100px){.desk-panels .mode button{font-size:36px}.desk-panels #scan-form{grid-template-columns:1fr}.desk-panels #scan-submit{min-height:48px}}
 @media(max-width:900px){.desk-panels{grid-template-columns:1fr}}
+
+.scan-title{text-align:center;font-size:48px;margin:18px 0 8px}.scan-instruction{text-align:center;font-size:15px;margin:0 0 22px}
+#scan-message.duplicate{background:#fff7df;color:#805e14}
+@media(max-width:600px){.scan-title{font-size:36px}.scan-instruction{font-size:13px}}

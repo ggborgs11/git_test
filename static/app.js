@@ -1,6 +1,6 @@
 const admin = location.pathname === '/admin' || location.pathname === '/admin/';
 const $ = id => document.getElementById(id);
-let action = 'in', state = {people: [], events: []}, todayEvents = [], busy = false, zone = 'Asia/Manila';
+let state = {people: [], events: []}, todayEvents = [], busy = false, zone = 'Asia/Manila';
 const esc = value => String(value).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const initials = name => name.split(/\s+/).slice(0,2).map(x=>x[0]).join('').toUpperCase();
 const time = timestamp => new Date(timestamp).toLocaleTimeString('en-PH',{timeZone:zone,hour:'2-digit',minute:'2-digit',second:'2-digit'});
@@ -52,31 +52,45 @@ for (const tab of document.querySelectorAll('.tab')) tab.addEventListener('click
   document.querySelectorAll('.view').forEach(v=>v.hidden=v.id!==tab.dataset.view);
   if(tab.dataset.view==='desk') $('barcode').focus();
 });
-for(const mode of ['in','out']) $(mode).addEventListener('click',()=>{
-  action=mode;
-  for(const id of ['in','out']) {$(id).classList.toggle('selected',id===mode);$(id).setAttribute('aria-pressed',id===mode);}
-  $('scan-submit').textContent=`Record Time ${mode==='in'?'In':'Out'} →`;
-  $('barcode').focus();
-});
-$('scan-form').addEventListener('submit',async event=>{
+const pendingScans=[];
+function focusScanner(){if(!$('desk').hidden) $('barcode').focus();}
+$('scan-form').addEventListener('submit',event=>{
   event.preventDefault();
-  if(busy) return;
   const barcode=$('barcode').value.trim();
   if(!barcode) return;
-  busy=true;
-  $('scan-submit').disabled=true;
-  try {
-    const result=await api('/api/scan',{barcode,action});
-    $('scan-message').className='success';
-    $('scan-message').textContent=`✓ ${result.name} · Time ${result.action==='in'?'In':'Out'} · ${time(result.timestamp)}`;
-    $('barcode').value='';
-    await refresh();
-  } catch(e) {
-    $('scan-message').className='error';
-    $('scan-message').textContent=e.message;
-    $('barcode').select();
-  } finally {busy=false;$('scan-submit').disabled=false;$('barcode').focus();}
+  $('barcode').value='';
+  focusScanner();
+  pendingScans.push(barcode);
+  processScans();
 });
+async function processScans(){
+  if(busy) return;
+  busy=true;$('scan-form').setAttribute('aria-busy','true');
+  while(pendingScans.length){
+    const barcode=pendingScans.shift();
+    try {
+      const result=await api('/api/scan',{barcode});
+      $('scan-message').className=result.duplicate?'duplicate':'success';
+      $('scan-message').textContent=result.duplicate
+        ? `${result.name} · Duplicate scan ignored. Still ${result.action==='in'?'In':'Out'}. Scan again after ${result.retry_after} seconds.`
+        : `✓ ${result.name} · Time ${result.action==='in'?'In':'Out'} · ${time(result.timestamp)}`;
+      await refresh();
+    } catch(e) {
+      $('scan-message').className='error';
+      $('scan-message').textContent=e.message;
+    }
+  }
+  busy=false;$('scan-form').setAttribute('aria-busy','false');
+  // Do not steal focus from admin forms or discard a barcode already being typed.
+  if(!admin) focusScanner();
+}
+window.addEventListener('focus',()=>{if(!admin) focusScanner();});
+if(!admin){
+  $('barcode').addEventListener('blur',()=>requestAnimationFrame(focusScanner));
+  document.addEventListener('pointerdown',event=>{
+    if(!event.target.closest('a,button,input')) focusScanner();
+  });
+}
 if(admin) $('person-form').addEventListener('submit',async event=>{
   event.preventDefault();
   const button=event.currentTarget.querySelector('button');button.disabled=true;

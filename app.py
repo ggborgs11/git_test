@@ -100,21 +100,23 @@ def add_people(rows):
         return result
 
 
-def scan(barcode, action):
-    if action not in ('in', 'out'):
-        raise ValueError('Choose Time In or Time Out.')
+def scan(barcode):
     with LOCK, connect() as db:
         person = db.execute('SELECT * FROM people WHERE barcode=?', (barcode,)).fetchone()
         if not person:
             raise ValueError('Unknown barcode. Register this person first.')
         last = db.execute('SELECT * FROM events WHERE person_id=? ORDER BY id DESC LIMIT 1', (person['id'],)).fetchone()
-        if action == 'out' and (not last or last['action'] == 'out'):
-            raise ValueError(f"{person['name']} is already out. Record Time In first.")
-        if action == 'in' and last and last['action'] == 'in':
-            raise ValueError(f"{person['name']} is already in. Duplicate scan ignored.")
-        timestamp = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(timezone.utc)
+        if last:
+            elapsed = (now - datetime.fromisoformat(last['timestamp'])).total_seconds()
+            if elapsed < 30:
+                import math
+                return {'name': person['name'], 'action': last['action'], 'timestamp': last['timestamp'],
+                        'duplicate': True, 'retry_after': math.ceil(30 - elapsed)}
+        action = 'out' if last and last['action'] == 'in' else 'in'
+        timestamp = now.isoformat()
         db.execute('INSERT INTO events(person_id,action,timestamp) VALUES (?,?,?)', (person['id'], action, timestamp))
-        return {'name': person['name'], 'action': action, 'timestamp': timestamp}
+        return {'name': person['name'], 'action': action, 'timestamp': timestamp, 'duplicate': False}
 
 
 def snapshot(day):
@@ -244,7 +246,8 @@ class Handler(BaseHTTPRequestHandler):
                     raise ValueError('Expected a list of people.')
                 return self.reply(201, {'people': add_people(rows)})
             if self.path == '/api/scan':
-                return self.reply(201, scan(str(data.get('barcode', '')).strip(), data.get('action')))
+                result = scan(str(data.get('barcode', '')).strip())
+                return self.reply(200 if result['duplicate'] else 201, result)
             self.reply(404, {'error': 'Not found'})
         except (ValueError, TypeError) as error:
             self.reply(400, {'error': str(error)})

@@ -66,7 +66,11 @@ class AccessTests(unittest.TestCase):
         self.assertIn(b'People & badges',self.request('/admin',browser=self.browser)[1])
         self.assertEqual(self.request('/api/people',{'people':[{'name':'Alex','barcode':'000001'}]},self.browser)[0],201)
         # Kiosk scanning works without an admin cookie.
-        self.assertEqual(self.request('/api/scan',{'barcode':'000001','action':'in'})[0],201)
+        self.assertEqual(self.request('/api/scan',{'barcode':'000001'})[0],201)
+        status,body=self.request('/api/scan',{'barcode':'000001','action':'out'})
+        self.assertEqual(status,200)
+        self.assertTrue(json.loads(body)['duplicate'])
+        self.assertEqual(json.loads(body)['action'],'in')
         self.assertEqual(self.request('/api/state',browser=self.browser)[0],200)
         self.assertIn(b'Alex',self.request('/api/export',browser=self.browser)[1])
         self.assertEqual(self.request('/api/logout',{},self.browser)[0],200)
@@ -85,8 +89,12 @@ class AccessTests(unittest.TestCase):
             self.assertEqual(self.request('/api/login',{'password':'invalid'})[0],401)
         self.assertEqual(self.request('/api/login',{'password':'test-fixture-password'})[0],429)
         app.add_people([{'name':'Alex','barcode':'000001'}])
-        for _ in range(5):
-            app.scan('000001','in');app.scan('000001','out')
+        from datetime import datetime, timedelta, timezone
+        base=datetime.now(timezone.utc)-timedelta(minutes=10)
+        with app.connect() as db:
+            for index in range(10):
+                db.execute('INSERT INTO events(person_id,action,timestamp) VALUES (?,?,?)',
+                           (1,'in' if index%2==0 else 'out',(base+timedelta(seconds=index*31)).isoformat()))
         state=json.loads(self.request('/api/desk')[1])
         self.assertEqual(state['scans'],10)
         self.assertEqual(len(state['events']),8)
