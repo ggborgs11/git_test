@@ -24,6 +24,8 @@ class AttendanceTests(unittest.TestCase):
 
     def test_register_300_people_and_automatic_attendance(self):
         people=app.add_people([{'name':f'Person {i}'} for i in range(300)])
+        self.assertTrue(all(p['barcode'] is None for p in people))
+        people=[app.assign_barcode(p['id']) for p in people]
         self.assertEqual(len(set(p['barcode'] for p in people)),300)
         barcode=people[0]['barcode'];now=datetime.now(timezone.utc)
         first=self.at(barcode,now)
@@ -48,7 +50,7 @@ class AttendanceTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError,'Unknown barcode'):app.scan('999999')
 
     def test_simultaneous_scans_record_once(self):
-        barcode=app.add_people([{'name':'Alex'}])[0]['barcode']
+        barcode=app.assign_barcode(app.add_people([{'name':'Alex'}])[0]['id'])['barcode']
         with ThreadPoolExecutor(max_workers=8) as pool:
             results=list(pool.map(lambda _:app.scan(barcode),range(8)))
         self.assertEqual(sum(not r['duplicate'] for r in results),1)
@@ -58,10 +60,10 @@ class AttendanceTests(unittest.TestCase):
 
     def test_other_people_can_scan_immediately(self):
         people=app.add_people([{'name':'Alex'},{'name':'Maria'}])
-        for person in people:self.assertFalse(app.scan(person['barcode'])['duplicate'])
+        for person in people:self.assertFalse(app.scan(app.assign_barcode(person['id'])['barcode'])['duplicate'])
 
     def test_duplicate_window_and_status_survive_restart(self):
-        barcode=app.add_people([{'name':'Alex'}])[0]['barcode'];now=datetime.now(timezone.utc)
+        barcode=app.assign_barcode(app.add_people([{'name':'Alex'}])[0]['id'])['barcode'];now=datetime.now(timezone.utc)
         first=self.at(barcode,now)
         app.initialize()
         repeated=self.at(barcode,now+timedelta(seconds=10))
@@ -71,7 +73,7 @@ class AttendanceTests(unittest.TestCase):
         self.assertEqual(self.at(barcode,now+timedelta(seconds=31))['action'],'out')
 
     def test_overnight_shift_and_local_date_boundary(self):
-        barcode=app.add_people([{'name':'Alex'}])[0]['barcode']
+        barcode=app.assign_barcode(app.add_people([{'name':'Alex'}])[0]['id'])['barcode']
         self.at(barcode,datetime(2026,10,5,15,59,tzinfo=timezone.utc))
         result=self.at(barcode,datetime(2026,10,5,16,1,tzinfo=timezone.utc))
         self.assertEqual(result['action'],'out')

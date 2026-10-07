@@ -67,12 +67,32 @@ def initialize():
     with connect() as db:
         db.executescript('''
         CREATE TABLE IF NOT EXISTS people (
-          id INTEGER PRIMARY KEY, name TEXT NOT NULL, barcode TEXT UNIQUE NOT NULL);
+          id INTEGER PRIMARY KEY, name TEXT NOT NULL, barcode TEXT UNIQUE);
         CREATE TABLE IF NOT EXISTS events (
           id INTEGER PRIMARY KEY, person_id INTEGER NOT NULL REFERENCES people(id),
           action TEXT NOT NULL CHECK(action IN ('in','out')), timestamp TEXT NOT NULL);
         CREATE INDEX IF NOT EXISTS events_person ON events(person_id, id);
         ''')
+        # Upgrade older databases without changing employee IDs or foreign keys.
+        columns=list(db.execute('PRAGMA table_info(people)'))
+        if any(c['name']=='barcode' and c['notnull'] for c in columns):
+            if {c['name'] for c in columns}!={'id','name','barcode'}:
+                raise RuntimeError('Custom people columns detected; migration stopped to preserve them.')
+            db.execute('PRAGMA foreign_keys = OFF')
+            try:
+                db.execute('BEGIN IMMEDIATE')
+                db.execute('CREATE TABLE people_nullable (id INTEGER PRIMARY KEY,name TEXT NOT NULL,barcode TEXT UNIQUE)')
+                db.execute('INSERT INTO people_nullable SELECT id,name,barcode FROM people')
+                db.execute('DROP TABLE people')
+                db.execute('ALTER TABLE people_nullable RENAME TO people')
+                if list(db.execute('PRAGMA foreign_key_check')):
+                    raise RuntimeError('Database migration failed its relationship check.')
+                db.commit()
+            except Exception:
+                db.rollback()
+                raise
+            finally:
+                db.execute('PRAGMA foreign_keys = ON')
         profiles.initialize(db)
 
 
@@ -83,18 +103,12 @@ def add_people(rows):
         result = []
         for row in rows:
             name = str(row.get('name', '')).strip()
-            barcode = str(row.get('barcode', '')).strip()
+            barcode = str(row.get('barcode') or '').strip()
             if not name or len(name) > 100:
                 raise ValueError('Each name must contain 1–100 characters.')
-            if not barcode:
-                next_id = db.execute('SELECT COALESCE(MAX(id), 0)+1 FROM people').fetchone()[0]
-                number = next_id
-                barcode = f'{number:06d}'
-                while db.execute('SELECT 1 FROM people WHERE barcode=?', (barcode,)).fetchone():
-                    number += 1
-                    barcode = f'{number:06d}'
-            if not barcode.isascii() or not barcode.isdigit() or not 1 <= len(barcode) <= 20:
+            if barcode and (not barcode.isascii() or not barcode.isdigit() or not 1 <= len(barcode) <= 20):
                 raise ValueError('Barcodes must contain 1–20 digits. Leading zeros are preserved.')
+            barcode=barcode or None
             details=profiles.validate(row.get('profile',{}))
             images=profiles.images_from_row(row)
             try:
@@ -121,7 +135,7 @@ def update_person(person_id,row):
         current=profiles.get(db,person_id)
         if type(row.get('version')) is not int or row['version']!=current['version']:
             raise ValueError('This 201 file changed in another session. Reopen it before saving.')
-        if row.get('barcode')!=current['barcode']:
+        if 'barcode' in row and row['barcode']!=current['barcode']:
             raise ValueError('An existing barcode cannot be changed in the 201 file.')
         db.execute('UPDATE people SET name=? WHERE id=?',(name.strip(),person_id))
         try:
@@ -134,7 +148,35 @@ def update_person(person_id,row):
         return profiles.get(db,person_id)
 
 
+def assign_barcode(person_id,barcode=None):
+    if barcode is not None and not isinstance(barcode,str):
+        raise ValueError('Barcode must be text.')
+    barcode=(barcode or '').strip()
+    if barcode and (not barcode.isascii() or not barcode.isdigit() or not 1<=len(barcode)<=20):
+        raise ValueError('Barcodes must contain 1–20 digits.')
+    with LOCK,connect() as db:
+        person=db.execute('SELECT * FROM people WHERE id=?',(person_id,)).fetchone()
+        if not person:raise ValueError('Employee not found.')
+        if person['barcode']:raise ValueError('This employee already has a barcode. Existing assignments are preserved.')
+        if not barcode:
+            number=person_id
+            barcode=f'{number:06d}'
+            while db.execute('SELECT 1 FROM people WHERE barcode=?',(barcode,)).fetchone():
+                number+=1;barcode=f'{number:06d}'
+        try:db.execute('UPDATE people SET barcode=? WHERE id=?',(barcode,person_id))
+        except sqlite3.IntegrityError:raise ValueError('Barcode is already assigned to another employee.') from None
+        return {'id':person_id,'name':person['name'],'barcode':barcode}
+
+
+def employee_list():
+    with connect() as db:
+        return [dict(row) for row in db.execute('SELECT p.id,p.name,p.barcode,f.employee_id FROM people p '
+                    'LEFT JOIN employee_profiles f ON f.person_id=p.id ORDER BY p.name COLLATE NOCASE')]
+
+
 def scan(barcode):
+    if not isinstance(barcode,str) or not barcode or not barcode.isascii() or not barcode.isdigit() or len(barcode)>20:
+        raise ValueError('Unknown barcode. Assign a valid barcode to an employee first.')
     with LOCK, connect() as db:
         person = db.execute('SELECT * FROM people WHERE barcode=?', (barcode,)).fetchone()
         if not person:
@@ -198,6 +240,9 @@ class Handler(BaseHTTPRequestHandler):
         from urllib.parse import urlparse, parse_qs
         url = urlparse(self.path)
         try:
+            if url.path=='/api/employees':
+                if not self.authenticated():return self.reply(401,{'error':'Admin login required.'})
+                return self.reply(200,{'people':employee_list()})
             match=re.fullmatch(r'/api/people/(\d+)(?:/image/(photo|signature))?',url.path)
             if match:
                 if not self.authenticated():
@@ -233,10 +278,10 @@ class Handler(BaseHTTPRequestHandler):
                     writer.writerow([name, event['barcode'], 'Time In' if event['action']=='in' else 'Time Out',
                                      datetime.fromisoformat(event['timestamp']).astimezone(LOCAL).strftime('%Y-%m-%d %H:%M:%S')])
                 return self.reply(200, output.getvalue().encode('utf-8-sig'), 'text/csv; charset=utf-8')
-            if url.path in ('/admin', '/admin/'):
-                filename = 'index.html' if self.authenticated() else 'login.html'
+            if url.path in ('/admin', '/admin/', '/admin/201', '/admin/201/'):
+                filename = ('employees.html' if url.path.rstrip('/')=='/admin/201' else 'index.html') if self.authenticated() else 'login.html'
                 return self.reply(200, (ROOT / 'static' / filename).read_bytes(), 'text/html; charset=utf-8')
-            files = {'/': ('kiosk.html', 'text/html'), '/login.js': ('login.js', 'text/javascript'), '/app.js': ('app.js', 'text/javascript'), '/profile.js': ('profile.js', 'text/javascript'), '/style.css': ('style.css', 'text/css')}
+            files = {'/': ('kiosk.html', 'text/html'), '/login.js': ('login.js', 'text/javascript'), '/app.js': ('app.js', 'text/javascript'), '/profile.js': ('profile.js', 'text/javascript'), '/employees.js': ('employees.js', 'text/javascript'), '/style.css': ('style.css', 'text/css')}
             if url.path not in files:
                 return self.reply(404, {'error': 'Not found'})
             filename, mime = files[url.path]
@@ -251,10 +296,11 @@ class Handler(BaseHTTPRequestHandler):
             return self.reply(403, {'error': 'Cross-origin requests are not allowed.'})
         try:
             profile_update=re.fullmatch(r'/api/people/(\d+)',self.path)
-            if (profile_update or self.path=='/api/people') and not self.authenticated():
+            barcode_update=re.fullmatch(r'/api/people/(\d+)/barcode',self.path)
+            if (profile_update or barcode_update or self.path in ('/api/people','/api/employees')) and not self.authenticated():
                 return self.reply(401,{'error':'Admin login required.'})
             length = int(self.headers.get('Content-Length', '0'))
-            limit=3000000 if (profile_update or self.path=='/api/people') else 200000
+            limit=3000000 if (profile_update or barcode_update or self.path in ('/api/people','/api/employees')) else 200000
             if not 0 < length <= limit:
                 raise ValueError('Request is empty or too large.')
             if self.headers.get('Content-Type', '').split(';')[0] != 'application/json':
@@ -288,6 +334,12 @@ class Handler(BaseHTTPRequestHandler):
                     with AUTH_LOCK:
                         SESSIONS.pop(cookie['clockwork_admin'].value, None)
                 return self.reply(200, {'ok': True}, cookie='clockwork_admin=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0')
+            if barcode_update:
+                return self.reply(200,assign_barcode(int(barcode_update[1]),data.get('barcode')))
+            if self.path=='/api/employees':
+                if data.get('barcode'):
+                    raise ValueError('Assign barcodes separately from People & badges.')
+                return self.reply(201,{'people':add_people([{**data,'barcode':None}])})
             if profile_update:
                 return self.reply(200,update_person(int(profile_update[1]),data))
             if self.path == '/api/people':

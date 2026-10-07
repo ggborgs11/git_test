@@ -2,6 +2,7 @@ const profileSections = [["personal", "Personal information", [["employee_id", "
 if(admin){
   let personId=null,version=0,dirty=false,generatedName='',saving=false,loading=false;
   let imageChanges={},fileReads=0,editorGeneration=0,imageRevision={photo:0,signature:0};
+  function profileMessage(text,kind='info'){$('people-message').textContent=text;$('people-message').dataset.kind=kind;}
   function section(key){
     document.querySelectorAll('.profile-tab').forEach(tab=>{
       const active=tab.dataset.section===key;tab.classList.toggle('active',active);
@@ -23,13 +24,15 @@ if(admin){
   function resetEditor(){
     editorGeneration++;
     $('person-form').reset();personId=null;version=0;dirty=false;generatedName='';imageChanges={};
-    $('profile-heading').textContent='Add a person';$('save-person').textContent='Add person';
-    $('new-barcode').readOnly=false;$('people-message').textContent='';
+    $('profile-heading').textContent='New 201 file';$('save-person').textContent='Create 201 file';
+    profileMessage('');$('profile-barcode-status').textContent='Barcode assignment is handled separately in People & badges.';
     for(const kind of ['photo','signature']){$('preview-'+kind).hidden=true;$('preview-'+kind).removeAttribute('src');}
     section('personal');
   }
-  $('new-person').addEventListener('click',()=>{if(!saving&&!loading&&mayDiscard()){resetEditor();$('name').focus();}});
-  $('cancel-profile').addEventListener('click',()=>{if(!saving&&!loading&&mayDiscard())resetEditor();});
+  function showEditor(){ $('profile-editor').hidden=false;$('employee-list').hidden=true; }
+  function showList(){ $('profile-editor').hidden=true;$('employee-list').hidden=false;history.replaceState(null,'','/admin/201'); }
+  $('new-person').addEventListener('click',()=>{if(!saving&&!loading&&mayDiscard()){resetEditor();showEditor();history.replaceState(null,'','/admin/201');$('name').focus();}});
+  $('cancel-profile').addEventListener('click',()=>{if(!saving&&!loading&&mayDiscard()){resetEditor();showList();refresh();}});
   $('person-form').addEventListener('input',()=>dirty=true);
   $('person-form').addEventListener('change',()=>dirty=true);
   for(const key of ['first_name','last_name','middle_name','suffix']) $('profile-'+key).addEventListener('input',()=>{
@@ -50,38 +53,45 @@ if(admin){
     $('profile-'+kind).addEventListener('change',async()=>{
       const file=$('profile-'+kind).files[0];if(!file)return;
       const generation=editorGeneration,revision=++imageRevision[kind];fileReads++;$('save-person').disabled=true;
-      try{const image=await readImage(file);if(generation!==editorGeneration||revision!==imageRevision[kind])return;imageChanges[kind]=image;$('preview-'+kind).src=imageChanges[kind];$('preview-'+kind).hidden=false;dirty=true;$('people-message').textContent='';}
-      catch(e){$('people-message').textContent=e.message;}
+      try{const image=await readImage(file);if(generation!==editorGeneration||revision!==imageRevision[kind])return;imageChanges[kind]=image;$('preview-'+kind).src=imageChanges[kind];$('preview-'+kind).hidden=false;dirty=true;profileMessage('');}
+      catch(e){profileMessage(e.message,'error');}
       finally{fileReads--;$('profile-'+kind).value='';$('save-person').disabled=saving||fileReads>0;}
     });
     $('remove-'+kind).addEventListener('click',()=>{
       imageRevision[kind]++;imageChanges[kind]=null;$('preview-'+kind).hidden=true;$('preview-'+kind).removeAttribute('src');dirty=true;
     });
   }
-  $('directory').addEventListener('click',async event=>{
-    const button=event.target.closest('[data-profile-id]');if(!button||saving||loading||!mayDiscard())return;
-    loading=true;button.disabled=true;
+  async function openProfile(id){
+    if(saving||loading||!mayDiscard())return;
+    loading=true;$('global-message').textContent='Opening employee record…';
     try{
-      const record=await api('/api/people/'+button.dataset.profileId);
-      resetEditor();personId=record.id;version=record.version;
-      $('name').value=record.name;$('new-barcode').value=record.barcode;$('new-barcode').readOnly=true;
+      const record=await api('/api/people/'+id);
+      resetEditor();showEditor();personId=record.id;version=record.version;
+      $('name').value=record.name;
+      $('profile-barcode-status').textContent=record.barcode?`Attendance barcode: ${record.barcode}`:'No attendance barcode yet. An admin can assign one from People & badges.';
       $('profile-heading').textContent=record.name+' · 201 file';$('save-person').textContent='Save 201 file';
       for(const [key,,fields] of profileSections)for(const [field] of fields)$('profile-'+field).value=record.profile[field]||'';
       for(const kind of ['photo','signature'])if(record.images[kind]){$('preview-'+kind).src=record.images[kind];$('preview-'+kind).hidden=false;}
-      $('profile-heading').scrollIntoView({behavior:'smooth',block:'start'});
-    }catch(e){$('people-message').textContent=e.message;}finally{loading=false;button.disabled=false;}
+      history.replaceState(null,'','/admin/201?person='+record.id);
+      $('profile-heading').scrollIntoView({block:'start'});$('global-message').textContent='';
+    }catch(e){$('global-message').textContent=e.message;}finally{loading=false;}
+  }
+  $('directory').addEventListener('click',event=>{
+    const button=event.target.closest('[data-profile-id]');if(button)openProfile(button.dataset.profileId);
   });
+  const initialPerson=new URLSearchParams(location.search).get('person');
+  if(initialPerson&&/^\d+$/.test(initialPerson))openProfile(initialPerson);
   $('person-form').addEventListener('submit',async event=>{
     event.preventDefault();if(saving||loading||fileReads)return;
     const name=$('name').value.trim();
-    if(!name){section('personal');$('name').focus();$('people-message').textContent='Enter the employee’s full name.';return;}
+    if(!name){section('personal');$('name').focus();profileMessage('Enter the employee’s full name.','error');return;}
     for(const input of event.currentTarget.querySelectorAll('input:not([type=file]),textarea')){
       if(!input.checkValidity()){
         section(input.closest('.profile-panel').id.replace('profile-panel-',''));input.reportValidity();return;
       }
     }
     const profile={};for(const [key,,fields] of profileSections)for(const [field] of fields)profile[field]=$('profile-'+field).value;
-    const row={name,barcode:$('new-barcode').value.trim(),profile,...imageChanges};
+    const row={name,profile,...imageChanges};
     saving=true;$('save-person').disabled=true;
     // Freeze the editor during saves so typed changes cannot be silently discarded.
     const controls=[...$('person-form').querySelectorAll('input,textarea,button')];controls.forEach(c=>c.disabled=true);
@@ -89,13 +99,17 @@ if(admin){
       if(personId){
         const result=await api('/api/people/'+personId,{...row,version});
         version=result.version;imageChanges={};dirty=false;$('profile-heading').textContent=result.name+' · 201 file';
-        $('people-message').textContent=`Saved 201 file for ${result.name}.`;
+        profileMessage(`Saved 201 file for ${result.name}.`,'success');
       }else{
-        const result=await api('/api/people',{people:[row]});const person=result.people[0];resetEditor();
-        $('people-message').textContent=`Added ${person.name}. Barcode: ${person.barcode}. 201 file saved.`;
+        const result=await api('/api/employees',row);const person=result.people[0];
+        personId=person.id;version=1;imageChanges={};dirty=false;
+        $('profile-heading').textContent=person.name+' · 201 file';$('save-person').textContent='Save 201 file';
+        $('profile-barcode-status').textContent='No attendance barcode yet. An admin can assign one from People & badges.';
+        history.replaceState(null,'','/admin/201?person='+person.id);
+        profileMessage(`Created 201 file for ${person.name}. Barcode can be assigned later.`,'success');
       }
       await refresh();
-    }catch(e){$('people-message').textContent=e.message;}
+    }catch(e){profileMessage(e.message,'error');}
     finally{saving=false;controls.forEach(c=>c.disabled=false);}
   });
   window.addEventListener('beforeunload',event=>{if(dirty){event.preventDefault();event.returnValue='';}});

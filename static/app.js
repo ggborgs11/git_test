@@ -12,10 +12,11 @@ async function api(path, body) {
   return data;
 }
 function directory() {
-  const query = $('search').value.trim().toLowerCase();
-  const people = state.people.filter(p=>p.name.toLowerCase().includes(query)||p.barcode.includes(query));
-  $('directory').innerHTML = people.length ? people.map(p=>`<div class="person"><span class="avatar">${esc(initials(p.name))}</span><div class="details"><b>${esc(p.name)}</b><small>${esc(p.barcode)}</small></div><span class="badge ${p.status==='out'?'out':''}">${p.status==='in'?'In':'Out'}</span><button type="button" class="profile-open" data-profile-id="${p.id}">201 file</button></div>`).join('') : '<p class="empty">No people found. Add a person or import your team.</p>';
+  const query=$('search').value.trim().toLowerCase();
+  const people=state.people.filter(p=>p.name.toLowerCase().includes(query)||String(p.barcode||'').includes(query));
+  $('directory').innerHTML=people.length?people.map(p=>`<div class="person"><span class="avatar">${esc(initials(p.name))}</span><div class="details"><b>${esc(p.name)}</b><small>${p.barcode?esc(p.barcode):'No barcode assigned'}</small></div><a class="profile-open" href="/admin/201?person=${p.id}">Edit 201 file</a>${p.barcode?`<span class="badge ${p.status==='out'?'out':''}">${p.status==='in'?'In':'Out'}</span>`:`<button type="button" class="profile-open" data-assign-id="${p.id}">Assign barcode</button>`}</div>`).join(''):'<p class="empty">No employees found. Create a 201 file first.</p>';
 }
+
 function render() {
   $('total').textContent = admin ? state.people.length : state.total;
   $('inside').textContent = admin ? state.people.filter(p=>p.status==='in').length : state.inside;
@@ -132,8 +133,8 @@ function barcodeSVG(value) {
 }
 if(admin) $('print').addEventListener('click',()=>{
   const query=$('search').value.trim().toLowerCase();
-  const people=state.people.filter(p=>p.name.toLowerCase().includes(query)||p.barcode.includes(query));
-  if(!people.length){$('people-message').textContent='Add people before printing badges.';return;}
+  const people=state.people.filter(p=>p.barcode&&(p.name.toLowerCase().includes(query)||p.barcode.includes(query)));
+  if(!people.length){$('assignment-message').textContent='No assigned barcodes to print for this search.';return;}
   $('badges').innerHTML=people.map(p=>`<article class="print-badge"><small>Cavite Nagano Seiko Inc. · ATTENDANCE</small><h3>${esc(p.name)}</h3>${barcodeSVG(p.barcode)}<p>${esc(p.barcode)}</p></article>`).join('');
   window.print();
 });
@@ -148,4 +149,30 @@ function clock(){
   $('clock').textContent=now.toLocaleTimeString('en-PH',{timeZone:zone,hour:'2-digit',minute:'2-digit',second:'2-digit'});
   $('clock-date').textContent=now.toLocaleDateString('en-PH',{timeZone:zone,weekday:'long',month:'long',day:'numeric',year:'numeric'});
 }
-clock();setInterval(clock,1000);refresh();setInterval(refresh,10000);$('barcode').focus();
+clock();setInterval(clock,1000);refresh();setInterval(refresh,10000);
+if(admin&&location.hash==='#people')document.querySelector('[data-view=people]').click();else focusScanner();
+
+if(admin){
+  let assignmentId=null,assigning=false;
+  $('directory').addEventListener('click',event=>{
+    const button=event.target.closest('[data-assign-id]');if(!button||assigning)return;
+    const person=state.people.find(p=>p.id===Number(button.dataset.assignId));if(!person)return;
+    assignmentId=person.id;$('assign-name').value=person.name;$('assign-barcode').value='';
+    $('assign-save').disabled=false;$('assign-generate').disabled=false;$('assignment-message').textContent='';
+    $('assign-name').scrollIntoView({block:'center'});$('assign-barcode').focus();
+  });
+  async function saveBarcode(generate){
+    if(assigning||assignmentId===null)return;
+    const barcode=$('assign-barcode').value.trim();
+    if(!generate&&!barcode){$('assignment-message').textContent='Enter a barcode or choose Generate & assign barcode.';return;}
+    assigning=true;$('assign-save').disabled=true;$('assign-generate').disabled=true;
+    try{
+      const result=await api('/api/people/'+assignmentId+'/barcode',generate?{}:{barcode});
+      $('assignment-message').textContent=`Assigned ${result.barcode} to ${result.name}. Ready for scanning and badge printing.`;
+      assignmentId=null;$('barcode-form').reset();await refresh();
+    }catch(e){$('assignment-message').textContent=e.message;}
+    finally{assigning=false;$('assign-save').disabled=assignmentId===null;$('assign-generate').disabled=assignmentId===null;}
+  }
+  $('barcode-form').addEventListener('submit',event=>{event.preventDefault();saveBarcode(false);});
+  $('assign-generate').addEventListener('click',()=>saveBarcode(true));
+}

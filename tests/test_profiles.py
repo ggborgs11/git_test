@@ -11,7 +11,7 @@ from test_auth import HTTPFixture
 # A harmless 1x1 PNG fixture, not an employee photograph.
 IMAGE='data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jP1sAAAAASUVORK5CYII='
 
-class ProfileDataTests(unittest.TestCase):
+class ProfileFixture(unittest.TestCase):
     def setUp(self):
         self.temp=tempfile.TemporaryDirectory();self.previous=app.DB
         app.DB=Path(self.temp.name)/'db.sqlite';app.initialize()
@@ -19,6 +19,8 @@ class ProfileDataTests(unittest.TestCase):
         app.DB=self.previous;self.temp.cleanup()
     def get(self,person_id):
         with app.connect() as db:return profiles.get(db,person_id)
+
+class ProfileDataTests(ProfileFixture):
     def test_create_reopen_edit_and_keep_attendance(self):
         person=app.add_people([{'name':'Test Person','barcode':'000001','profile':{'employee_id':'0012','sss':'00001234','education':'School A'},'photo':IMAGE,'signature':IMAGE}])[0]
         app.scan(person['barcode']);record=self.get(person['id'])
