@@ -49,3 +49,17 @@ main{padding-top:12px}nav{margin-top:0}
 .activity .avatar{width:38px;height:38px;font-size:12px}.activity .details{min-width:0;overflow-wrap:anywhere}.activity .details small{font-size:13px;margin-top:5px}
 .activity .badge{font-size:13px;padding:6px 8px;white-space:nowrap}.activity time{grid-column:2/-1;justify-self:end;font-size:17px;margin:0}
 @media(max-width:600px){#scan-message{min-height:190px;padding:20px 12px;font-size:20px}.scan-action{font-size:56px}.scan-person{font-size:26px}.scan-result-time{font-size:20px}.scan-duplicate{font-size:24px}.scan-ready{font-size:24px}.recent h2{font-size:22px}.activity{font-size:17px;grid-template-columns:32px minmax(0,1fr) auto;gap:8px}.activity .avatar{width:32px;height:32px}.activity .badge{font-size:12px}}
+/* Admin employee 201-file editor. */
+.people-grid{grid-template-columns:minmax(0,1.8fr) minmax(280px,1fr);align-items:start}
+.profile-editor{min-width:0}.profile-editor h3{margin:6px 0}.profile-editor .eyebrow{margin:0}
+.secondary,.profile-open{border:1px solid var(--line);border-radius:7px;padding:9px 12px;background:var(--bg);font-size:12px;font-weight:600;color:var(--green)}
+.profile-open{white-space:nowrap}.profile-editor .hint{margin:12px 0}.profile-tabs{display:flex;flex-wrap:wrap;gap:6px;margin:18px 0;border-bottom:1px solid var(--line);padding-bottom:12px}
+.profile-tab{font-size:12px;padding:9px 10px;border-radius:6px;background:var(--bg);color:var(--muted)}.profile-tab.active{background:var(--green);color:white}
+.profile-fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:4px 16px}.profile-field{min-width:0}.profile-field.wide{grid-column:1/-1}
+.profile-field label{margin-top:10px}.profile-field input{padding:10px}.profile-field textarea{width:100%;padding:12px;border:1px solid #d4ddd3;border-radius:8px;font:inherit;color:var(--ink);resize:vertical;min-height:100px}
+.profile-field textarea:focus{outline:2px solid #a1bd82;outline-offset:2px}.required{color:#a33c26}
+.profile-panel textarea{min-height:180px}#profile-panel-personal textarea{min-height:80px}.profile-actions{display:flex;gap:10px;align-items:center;margin-top:22px}.profile-actions .primary{width:auto;margin:0}.profile-editor #people-message{margin-top:14px;font-size:13px;line-height:1.5}
+.profile-media{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}.profile-preview{display:block;width:100%;height:160px;object-fit:contain;background:var(--bg);border:1px solid var(--line);border-radius:8px}.profile-media input{font-size:11px;margin:8px 0}
+.import-card{margin-top:20px}.people-grid .person{flex-wrap:wrap}.people-grid .person .details{min-width:100px;overflow-wrap:anywhere}.profile-field input[readonly]{background:var(--bg);color:var(--muted)}
+@media(max-width:1000px){.people-grid{grid-template-columns:1fr}.people-grid aside{min-width:0}}
+@media(max-width:480px){.profile-fields,.profile-media{grid-template-columns:1fr}.profile-field.wide{grid-column:auto}.profile-actions{flex-wrap:wrap}.profile-editor .card-top{flex-wrap:wrap;align-items:flex-start}.profile-tabs{gap:5px}.profile-tab{font-size:11px}}

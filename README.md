@@ -32,9 +32,21 @@ Open `http://127.0.0.1:8000` in the browser on the same computer. For a trusted 
 
 Attendance uses server timestamps, stored in UTC and displayed in **Asia/Manila**. Set `ATTENDANCE_TIMEZONE` to another IANA timezone before starting if needed. Keep the server clock accurate.
 
+## Employee 201 files
+
+Sign in at `/admin` and open **People & badges**. **Add a person** now includes a 201 file with six sections: personal information, educational background, family background, employment history, other information, and work information. Only the full name is required. Education, family, employment history, and other information are free-text sections. Names can be typed directly or generated from first/middle/last name and suffix.
+
+Personal information includes employee ID, addresses, contact details, birth details, emergency contact, PhilHealth/SSS/TIN/Pag-IBIG numbers, photo, and signature. Employee IDs are optional but must be unique when supplied; IDs and phone numbers are stored as text to preserve leading zeros. Employee ID is separate from the attendance barcode.
+
+Upload PNG or JPEG photos/signatures up to 1 MB each. Profiles and images are available only after admin login; they are not included in the public kiosk, badge printing, or attendance CSV exports. The public kiosk still shows employee names and barcodes as before.
+
+To view or edit an existing employee, choose **201 file** beside their name. Save with **Save 201 file**. Existing barcodes are read-only so attendance stays attached to the same person. Concurrent edits are checked: if another admin saved first, reopen the file before saving. **New person** starts a new record. CSV imports still accept `name,barcode`; complete their 201 files afterward.
+
+Existing installations upgrade their database automatically on startup, adding separate profile/image tables while retaining people and attendance. Profile details and images are stored in the same `data/attendance.db` file; include it in private backups. The server owner can access the database directly, so admin login controls browser access rather than encrypting the file.
+
 ## Update an existing installation
 
-Stop the app with Ctrl+C. Back up the existing `data` folder. Copy the updated `app.py`, `requirements.txt`, and `static` folder into your existing app folder. Keep your existing `data` folder intact: it contains all people and attendance records. Install requirements and run `py app.py` again. Choose your admin password when prompted.
+Stop the app with Ctrl+C. Back up the existing `data` folder. Copy the updated `app.py`, `profiles.py`, `requirements.txt`, and `static` folder into your existing app folder. Keep your existing `data` folder intact: it contains all people and attendance records. Install requirements and run `py app.py` again. Choose your admin password when prompted.
 
 To change a forgotten password, stop the server and run `py app.py --set-admin-password` on the server computer, then restart. The password is saved as a salted hash in `data/admin-password.json`. Anyone with control of the server computer/files can reset it; this protects browser access, not access to the computer itself.
 
@@ -49,4 +61,4 @@ python3 -m unittest discover -s tests -v
 node --check static/app.js
 ```
 
-Tests cover 300 people, automatic In/Out transitions, the 30-second duplicate window, concurrent scans, restart persistence, atomic import, unknown barcodes, leading zeros, and Manila date boundaries. Access tests cover admin login/logout, session expiry, protected APIs, and the public kiosk. Physical scanner and printer verification require your devices.
+Tests cover 300 people, automatic In/Out transitions, the 30-second duplicate window, concurrent scans, restart persistence, atomic import, unknown barcodes, leading zeros, and Manila date boundaries. Access tests cover admin login/logout, session expiry, protected APIs, and the public kiosk. 201-file tests cover creation/editing, legacy database upgrades, employee ID uniqueness, image validation/removal, stale edit protection, and profile/image access controls. Physical scanner and printer verification require your devices.

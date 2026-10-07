@@ -10,7 +10,7 @@ from http.server import ThreadingHTTPServer
 import app
 
 
-class AccessTests(unittest.TestCase):
+class HTTPFixture(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.previous = app.DB
@@ -42,6 +42,8 @@ class AccessTests(unittest.TestCase):
         with response:
             return response.status, response.read()
 
+
+class AccessTests(HTTPFixture):
     def test_public_screen_does_not_expose_admin_data_or_controls(self):
         app.add_people([{'name':'Private directory entry'}])
         status, html = self.request('/')

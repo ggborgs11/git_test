@@ -14,7 +14,7 @@ async function api(path, body) {
 function directory() {
   const query = $('search').value.trim().toLowerCase();
   const people = state.people.filter(p=>p.name.toLowerCase().includes(query)||p.barcode.includes(query));
-  $('directory').innerHTML = people.length ? people.map(p=>`<div class="person"><span class="avatar">${esc(initials(p.name))}</span><div class="details"><b>${esc(p.name)}</b><small>${esc(p.barcode)}</small></div><span class="badge ${p.status==='out'?'out':''}">${p.status==='in'?'In':'Out'}</span></div>`).join('') : '<p class="empty">No people found. Add a person or import your team.</p>';
+  $('directory').innerHTML = people.length ? people.map(p=>`<div class="person"><span class="avatar">${esc(initials(p.name))}</span><div class="details"><b>${esc(p.name)}</b><small>${esc(p.barcode)}</small></div><span class="badge ${p.status==='out'?'out':''}">${p.status==='in'?'In':'Out'}</span><button type="button" class="profile-open" data-profile-id="${p.id}">201 file</button></div>`).join('') : '<p class="empty">No people found. Add a person or import your team.</p>';
 }
 function render() {
   $('total').textContent = admin ? state.people.length : state.total;
@@ -92,15 +92,6 @@ if(!admin){
     if(!event.target.closest('a,button,input')) focusScanner();
   });
 }
-if(admin) $('person-form').addEventListener('submit',async event=>{
-  event.preventDefault();
-  const button=event.currentTarget.querySelector('button');button.disabled=true;
-  try {
-    const result=await api('/api/people',{people:[{name:$('name').value,barcode:$('new-barcode').value}]});
-    $('people-message').textContent=`Added ${result.people[0].name}. Barcode: ${result.people[0].barcode}`;
-    $('person-form').reset();await refresh();
-  }catch(e){$('people-message').textContent=e.message;}finally{button.disabled=false;}
-});
 // RFC 4180-style quoted fields, including commas, escaped quotes, and newlines.
 function parseCSV(text) {
   text=text.replace(/^\uFEFF/,'');
@@ -126,9 +117,9 @@ if(admin) $('import').addEventListener('change',async()=>{
     if(file.size>200000)throw new Error('Use a CSV smaller than 200 KB.');
     const people=parseCSV(await file.text());
     const result=await api('/api/people',{people});
-    $('people-message').textContent=`Imported ${result.people.length} people. Badges are ready to print.`;
+    $('import-message').textContent=`Imported ${result.people.length} people. Badges are ready to print.`;
     await refresh();
-  }catch(e){$('people-message').textContent=e.message;}finally{$('import').disabled=false;$('import').value='';}
+  }catch(e){$('import-message').textContent=e.message;}finally{$('import').disabled=false;$('import').value='';}
 });
 // Code 39: n = narrow, w = wide; each character has nine alternating bars/spaces.
 const patterns={'0':'nnnwwnwnn','1':'wnnwnnnnw','2':'nnwwnnnnw','3':'wnwwnnnnn','4':'nnnwwnnnw','5':'wnnwwnnnn','6':'nnwwwnnnn','7':'nnnwnnwnw','8':'wnnwnnwnn','9':'nnwwnnwnn','*':'nwnnwnwnn'};

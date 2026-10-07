@@ -11,6 +11,8 @@ import io
 import json
 import os
 import sqlite3
+import profiles
+import re
 import threading
 from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -71,6 +73,7 @@ def initialize():
           action TEXT NOT NULL CHECK(action IN ('in','out')), timestamp TEXT NOT NULL);
         CREATE INDEX IF NOT EXISTS events_person ON events(person_id, id);
         ''')
+        profiles.initialize(db)
 
 
 def add_people(rows):
@@ -92,12 +95,43 @@ def add_people(rows):
                     barcode = f'{number:06d}'
             if not barcode.isascii() or not barcode.isdigit() or not 1 <= len(barcode) <= 20:
                 raise ValueError('Barcodes must contain 1–20 digits. Leading zeros are preserved.')
+            details=profiles.validate(row.get('profile',{}))
+            images=profiles.images_from_row(row)
             try:
                 cursor = db.execute('INSERT INTO people(name, barcode) VALUES (?,?)', (name, barcode))
             except sqlite3.IntegrityError:
                 raise ValueError(f'Barcode {barcode} is already registered.') from None
+            try:
+                db.execute('INSERT INTO employee_profiles(person_id,employee_id,details) VALUES (?,?,?)',
+                           (cursor.lastrowid,details.get('employee_id') or None,json.dumps(details)))
+            except sqlite3.IntegrityError:
+                raise ValueError('Employee ID is already registered.') from None
+            profiles.save_images(db,cursor.lastrowid,images)
             result.append({'id': cursor.lastrowid, 'name': name, 'barcode': barcode})
         return result
+
+
+def update_person(person_id,row):
+    name=row.get('name','')
+    if not isinstance(name,str) or not 1<=len(name.strip())<=100:
+        raise ValueError('Each name must contain 1–100 characters.')
+    details=profiles.validate(row.get('profile',{}))
+    images=profiles.images_from_row(row)
+    with LOCK,connect() as db:
+        current=profiles.get(db,person_id)
+        if type(row.get('version')) is not int or row['version']!=current['version']:
+            raise ValueError('This 201 file changed in another session. Reopen it before saving.')
+        if row.get('barcode')!=current['barcode']:
+            raise ValueError('An existing barcode cannot be changed in the 201 file.')
+        db.execute('UPDATE people SET name=? WHERE id=?',(name.strip(),person_id))
+        try:
+            db.execute('INSERT INTO employee_profiles(person_id,employee_id,details,version) VALUES (?,?,?,?) '
+                       'ON CONFLICT(person_id) DO UPDATE SET employee_id=excluded.employee_id,details=excluded.details,version=excluded.version',
+                       (person_id,details.get('employee_id') or None,json.dumps(details),current['version']+1))
+        except sqlite3.IntegrityError:
+            raise ValueError('Employee ID is already registered.') from None
+        profiles.save_images(db,person_id,images)
+        return profiles.get(db,person_id)
 
 
 def scan(barcode):
@@ -164,6 +198,18 @@ class Handler(BaseHTTPRequestHandler):
         from urllib.parse import urlparse, parse_qs
         url = urlparse(self.path)
         try:
+            match=re.fullmatch(r'/api/people/(\d+)(?:/image/(photo|signature))?',url.path)
+            if match:
+                if not self.authenticated():
+                    return self.reply(401,{'error':'Admin login required.'})
+                person_id=int(match[1])
+                with connect() as db:
+                    if match[2]:
+                        image=db.execute('SELECT mime,content FROM employee_images WHERE person_id=? AND kind=?',
+                                         (person_id,match[2])).fetchone()
+                        if not image:return self.reply(404,{'error':'Image not found.'})
+                        return self.reply(200,image['content'],image['mime'])
+                    return self.reply(200,profiles.get(db,person_id))
             if url.path == '/api/desk':
                 state = snapshot(datetime.now(LOCAL).strftime('%Y-%m-%d'))
                 return self.reply(200, {'total': len(state['people']),
@@ -190,7 +236,7 @@ class Handler(BaseHTTPRequestHandler):
             if url.path in ('/admin', '/admin/'):
                 filename = 'index.html' if self.authenticated() else 'login.html'
                 return self.reply(200, (ROOT / 'static' / filename).read_bytes(), 'text/html; charset=utf-8')
-            files = {'/': ('kiosk.html', 'text/html'), '/login.js': ('login.js', 'text/javascript'), '/app.js': ('app.js', 'text/javascript'), '/style.css': ('style.css', 'text/css')}
+            files = {'/': ('kiosk.html', 'text/html'), '/login.js': ('login.js', 'text/javascript'), '/app.js': ('app.js', 'text/javascript'), '/profile.js': ('profile.js', 'text/javascript'), '/style.css': ('style.css', 'text/css')}
             if url.path not in files:
                 return self.reply(404, {'error': 'Not found'})
             filename, mime = files[url.path]
@@ -204,8 +250,12 @@ class Handler(BaseHTTPRequestHandler):
         if origin and origin != 'http://' + self.headers.get('Host', ''):
             return self.reply(403, {'error': 'Cross-origin requests are not allowed.'})
         try:
+            profile_update=re.fullmatch(r'/api/people/(\d+)',self.path)
+            if (profile_update or self.path=='/api/people') and not self.authenticated():
+                return self.reply(401,{'error':'Admin login required.'})
             length = int(self.headers.get('Content-Length', '0'))
-            if not 0 < length <= 200000:
+            limit=3000000 if (profile_update or self.path=='/api/people') else 200000
+            if not 0 < length <= limit:
                 raise ValueError('Request is empty or too large.')
             if self.headers.get('Content-Type', '').split(';')[0] != 'application/json':
                 raise ValueError('Use JSON requests.')
@@ -238,6 +288,8 @@ class Handler(BaseHTTPRequestHandler):
                     with AUTH_LOCK:
                         SESSIONS.pop(cookie['clockwork_admin'].value, None)
                 return self.reply(200, {'ok': True}, cookie='clockwork_admin=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0')
+            if profile_update:
+                return self.reply(200,update_person(int(profile_update[1]),data))
             if self.path == '/api/people':
                 if not self.authenticated():
                     return self.reply(401, {'error': 'Admin login required.'})
