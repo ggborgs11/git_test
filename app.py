@@ -12,6 +12,7 @@ import json
 import os
 import sqlite3
 import profiles
+import attendance
 import re
 import threading
 from datetime import datetime, timezone
@@ -240,6 +241,13 @@ class Handler(BaseHTTPRequestHandler):
         from urllib.parse import urlparse, parse_qs
         url = urlparse(self.path)
         try:
+            if url.path in ('/api/attendance','/api/attendance/export'):
+                if not self.authenticated():return self.reply(401,{'error':'Admin login required.'})
+                query={key:values[0] for key,values in parse_qs(url.query,keep_blank_values=True).items()}
+                with connect() as db:result=attendance.report(db,LOCAL,query)
+                if url.path.endswith('/export'):
+                    return self.reply(200,attendance.export_csv(result,LOCAL,query.get('format')=='summary'),'text/csv; charset=utf-8')
+                return self.reply(200,result)
             if url.path=='/api/employees':
                 if not self.authenticated():return self.reply(401,{'error':'Admin login required.'})
                 return self.reply(200,{'people':employee_list()})
@@ -281,7 +289,7 @@ class Handler(BaseHTTPRequestHandler):
             if url.path in ('/admin', '/admin/', '/admin/201', '/admin/201/'):
                 filename = ('employees.html' if url.path.rstrip('/')=='/admin/201' else 'index.html') if self.authenticated() else 'login.html'
                 return self.reply(200, (ROOT / 'static' / filename).read_bytes(), 'text/html; charset=utf-8')
-            files = {'/': ('kiosk.html', 'text/html'), '/login.js': ('login.js', 'text/javascript'), '/app.js': ('app.js', 'text/javascript'), '/profile.js': ('profile.js', 'text/javascript'), '/employees.js': ('employees.js', 'text/javascript'), '/style.css': ('style.css', 'text/css')}
+            files = {'/': ('kiosk.html', 'text/html'), '/login.js': ('login.js', 'text/javascript'), '/app.js': ('app.js', 'text/javascript'), '/profile.js': ('profile.js', 'text/javascript'), '/employees.js': ('employees.js', 'text/javascript'), '/records.js': ('records.js', 'text/javascript'), '/style.css': ('style.css', 'text/css')}
             if url.path not in files:
                 return self.reply(404, {'error': 'Not found'})
             filename, mime = files[url.path]

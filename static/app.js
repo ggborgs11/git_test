@@ -23,10 +23,6 @@ function render() {
   $('scans').textContent = admin ? todayEvents.length : state.scans;
   $('recent').innerHTML = todayEvents.length ? todayEvents.slice(0,8).map(e=>`<div class="activity"><span class="avatar">${esc(initials(e.name))}</span><div class="details"><b>${esc(e.name)}</b><small>Barcode ${esc(e.barcode)}</small></div><span class="badge ${e.action==='out'?'out':''}">Time ${e.action==='in'?'In':'Out'}</span><time>${time(e.timestamp)}</time></div>`).join('') : '<p class="empty">A fresh start.<br>Today’s scans will appear here.</p>';
   if(!admin) return;
-  $('records-body').innerHTML = state.events.map(e=>`<tr><td>${esc(e.name)}</td><td>${esc(e.barcode)}</td><td><span class="badge ${e.action==='out'?'out':''}">Time ${e.action==='in'?'In':'Out'}</span></td><td>${time(e.timestamp)}</td></tr>`).join('');
-  $('records-empty').hidden = state.events.length > 0;
-  $('export').href = '/api/export?date='+encodeURIComponent($('date').value);
-  $('timezone').textContent = `Times shown in ${zone}. Export the selected day for Excel.`;
   directory();
 }
 async function refresh() {
@@ -35,14 +31,13 @@ async function refresh() {
       state=await api('/api/desk');zone=state.timezone;todayEvents=state.events;
       render();$('connection').textContent='Connected';$('global-message').textContent='';return;
     }
-    const selected = $('date').value;
-    state = await api('/api/state'+(selected?'?date='+encodeURIComponent(selected):''));
-    zone = state.timezone;
-    if (!selected) $('date').value = state.today;
-    todayEvents = $('date').value===state.today ? state.events : (await api('/api/state')).events;
+    state=await api('/api/state');zone=state.timezone;todayEvents=state.events;
+    if(!$('date').value)$('date').value=state.today;
+    if(!$('records-month').value)$('records-month').value=state.today.slice(0,7);
     render();
     $('connection').textContent='Connected';
     $('global-message').textContent='';
+    if(!$('records').hidden&&typeof refreshAttendance==='function')await refreshAttendance();
   } catch(e) {
     $('connection').textContent='Offline';
     $('global-message').textContent='Cannot refresh records: '+e.message;
@@ -52,6 +47,7 @@ for (const tab of document.querySelectorAll('.tab')) tab.addEventListener('click
   document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('active',t===tab));
   document.querySelectorAll('.view').forEach(v=>v.hidden=v.id!==tab.dataset.view);
   if(tab.dataset.view==='desk') $('barcode').focus();
+  if(tab.dataset.view==='records'&&typeof refreshAttendance==='function')refreshAttendance();
 });
 const pendingScans=[];
 function focusScanner(){if(!$('desk').hidden) $('barcode').focus();}
@@ -139,7 +135,7 @@ if(admin) $('print').addEventListener('click',()=>{
   window.print();
 });
 if(admin) $('search').addEventListener('input',directory);
-if(admin) $('date').addEventListener('change',refresh);
+
 if(admin) $('logout').addEventListener('click',async()=>{
   try {await api('/api/logout',{});location.replace('/');}
   catch(e){$('global-message').textContent='Could not log out: '+e.message;}
