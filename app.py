@@ -171,8 +171,14 @@ def assign_barcode(person_id,barcode=None):
 
 def employee_list():
     with connect() as db:
-        return [dict(row) for row in db.execute('SELECT p.id,p.name,p.barcode,f.employee_id FROM people p '
-                    'LEFT JOIN employee_profiles f ON f.person_id=p.id ORDER BY p.name COLLATE NOCASE')]
+        result=[]
+        for row in db.execute('SELECT p.id,p.name,p.barcode,f.employee_id,f.details FROM people p '
+                              'LEFT JOIN employee_profiles f ON f.person_id=p.id ORDER BY p.name COLLATE NOCASE'):
+            person=dict(row)
+            details=json.loads(person.pop('details') or '{}')
+            person.update(attendance.name_fields(person['name'],details))
+            result.append(person)
+        return result
 
 
 def scan(barcode):

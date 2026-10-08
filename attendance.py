@@ -7,6 +7,16 @@ from calendar import monthrange
 from datetime import datetime, timedelta, timezone
 
 
+def name_fields(name, details):
+    last=details.get('last_name','').strip()
+    first=details.get('first_name','').strip()
+    # Never guess compound surnames from a space-separated full name.
+    if not last and ',' in name:
+        last,first=(part.strip() for part in name.split(',',1))
+    return {'last_name':last,'first_name':first,
+            'sort_name':f"{last}, {first}".rstrip(', ') if last else name}
+
+
 def report(db, local, query):
     day=query.get('date');month=query.get('month')
     if 'month' in query and not month:month=datetime.now(local).strftime('%Y-%m')
@@ -25,7 +35,7 @@ def report(db, local, query):
     people=[]
     for row in db.execute('SELECT p.id,p.name,p.barcode,f.details FROM people p LEFT JOIN employee_profiles f ON f.person_id=p.id ORDER BY p.name COLLATE NOCASE'):
         details=json.loads(row['details']) if row['details'] else {}
-        people.append({'id':row['id'],'name':row['name'],'barcode':row['barcode'],'department':details.get('department','').strip()})
+        people.append({'id':row['id'],'name':row['name'],'barcode':row['barcode'],'department':details.get('department','').strip(), **name_fields(row['name'],details)})
     by_id={p['id']:p for p in people}
     department=query.get('department')
     selected=None
@@ -36,7 +46,7 @@ def report(db, local, query):
         if department is not None and selected['department']!=department:
             raise ValueError('Selected employee is not in the selected department.')
     sort=query.get('sort','time')
-    if sort not in ('time','department','person'):raise ValueError('Invalid attendance sort.')
+    if sort not in ('time','department','person','last_name'):raise ValueError('Invalid attendance sort.')
     records=[]
     sql='SELECT id,person_id,action,timestamp FROM events WHERE timestamp>=? AND timestamp<?'
     args=[start.astimezone(timezone.utc).isoformat(),end.astimezone(timezone.utc).isoformat()]
@@ -50,6 +60,10 @@ def report(db, local, query):
     # Stable grouping retains newest-first order within each employee.
     if sort=='department':records.sort(key=lambda r:(r['department'].casefold(),r['name'].casefold(),r['person_id']))
     elif sort=='person':records.sort(key=lambda r:(r['name'].casefold(),r['person_id']))
+    elif sort=='last_name':
+        records.sort(key=lambda r:(by_id[r['person_id']]['sort_name'].casefold(),r['person_id']))
+        people.sort(key=lambda p:(p['sort_name'].casefold(),p['id']))
+        for record in records:record['name']=by_id[record['person_id']]['sort_name']
     days=[]
     if month and selected:
         grouped={}

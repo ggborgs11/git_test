@@ -12,11 +12,14 @@ async function api(path,body){
 function directory(){
   const query=$('search').value.trim().toLowerCase();
   const rows=employeeRows.filter(p=>[p.name,p.employee_id,p.barcode].some(value=>String(value||'').toLowerCase().includes(query)));
-  $('directory').innerHTML=rows.length?rows.map(p=>`<button type="button" class="employee-row" data-profile-id="${p.id}"><span class="employee-row-details"><b>${esc(p.name)}</b><small>Employee ID: ${esc(p.employee_id||'Not set')} · ${p.barcode?'Barcode: '+esc(p.barcode):'Barcode not assigned'}</small></span><span class="employee-row-edit">Edit 201 file →</span></button>`).join(''):'<p class="empty">No employees found. Choose New 201 file to add an employee.</p>';
+  const byLast=$('employee-sort').value==='last_name';
+  rows.sort((a,b)=>(byLast?a.sort_name:a.name).localeCompare(byLast?b.sort_name:b.name));
+  $('directory').innerHTML=rows.length?rows.map(p=>`<button type="button" class="employee-row" data-profile-id="${p.id}"><span class="employee-row-details"><b>${esc(byLast?p.sort_name:p.name)}</b><small>Employee ID: ${esc(p.employee_id||'Not set')} · ${p.barcode?'Barcode: '+esc(p.barcode):'Barcode not assigned'}</small></span><span class="employee-row-edit">Edit 201 file →</span></button>`).join(''):'<p class="empty">No employees found. Choose New 201 file to add an employee.</p>';
 }
 async function refresh(){
   try{employeeRows=(await api('/api/employees')).people;directory();}
   catch(e){$('global-message').textContent='Could not load employees: '+e.message;}
 }
+$('employee-sort').addEventListener('change',directory);
 $('search').addEventListener('input',directory);
 refresh();setInterval(refresh,10000);

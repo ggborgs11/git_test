@@ -47,6 +47,22 @@ class ReportTests(HTTPFixture):
         self.assertEqual([r['department'] for r in grouped],['','Assembly','Assembly','Quality'])
         self.assertEqual({p['name'] for p in result['people']},{'Alice','Bob','Carol','No scans'})
         self.assertEqual(self.report({'month':'2026-10','person':'4'})['records'],[])
+    def test_surname_sort_uses_profile_and_preserves_saved_names(self):
+        with app.connect() as db:
+            db.execute('UPDATE employee_profiles SET details=? WHERE person_id=1',
+                       (json.dumps({'last_name':'Zulu','first_name':'Alice','department':'Assembly'}),))
+            db.execute('UPDATE employee_profiles SET details=? WHERE person_id=2',
+                       (json.dumps({'last_name':'Dela Cruz','first_name':'Bob','department':'Quality'}),))
+        result=self.report({'date':'2026-10-01','sort':'last_name'})
+        self.assertEqual([r['name'] for r in result['records']],['Carol','Dela Cruz, Bob','Zulu, Alice','Zulu, Alice'])
+        exported=list(csv.reader(io.StringIO(attendance.export_csv(result,app.LOCAL).decode('utf-8-sig'))))
+        self.assertEqual(exported[2][1],'Dela Cruz, Bob')
+        self.assertEqual(next(p for p in app.employee_list() if p['id']==2)['sort_name'],'Dela Cruz, Bob')
+        with app.connect() as db:
+            self.assertEqual(db.execute('SELECT name FROM people WHERE id=2').fetchone()['name'],'Bob')
+        self.assertEqual(attendance.name_fields('Dalida, Obet',{})['sort_name'],'Dalida, Obet')
+        self.assertEqual(attendance.name_fields('Dela Cruz Juan',{})['sort_name'],'Dela Cruz Juan')
+
     def test_filtered_exports_and_summary(self):
         result=self.report({'month':'2026-10','department':'Assembly','person':'1'})
         raw=list(csv.reader(io.StringIO(attendance.export_csv(result,app.LOCAL).decode('utf-8-sig'))))

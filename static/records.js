@@ -18,7 +18,7 @@ function populateAttendanceFilters(data){
   $('records-department').value=department;
   const selected=$('records-person').value;
   const people=data.people.filter(p=>!department||p.department===department.slice(2));
-  $('records-person').innerHTML='<option value="">All employees</option>'+people.map(p=>`<option value="${p.id}">${esc(p.name)}${p.barcode?' · '+esc(p.barcode):''}</option>`).join('');
+  $('records-person').innerHTML='<option value="">All employees</option>'+people.map(p=>`<option value="${p.id}">${esc($('records-sort').value==='last_name'?p.sort_name:p.name)}${p.barcode?' · '+esc(p.barcode):''}</option>`).join('');
   $('records-person').value=people.some(p=>String(p.id)===selected)?selected:'';
 }
 function renderAttendance(data){
