@@ -21,7 +21,18 @@ def report(db, local, query):
     day=query.get('date');month=query.get('month')
     if 'month' in query and not month:month=datetime.now(local).strftime('%Y-%m')
     if day and month:raise ValueError('Choose either a date or a month.')
-    if month:
+    range_requested='start_date' in query or 'end_date' in query
+    if range_requested:
+        if day or month:raise ValueError('Choose a date range, a date, or a month.')
+        first=query.get('start_date','');last=query.get('end_date','')
+        if not all(re.fullmatch(r'\d{4}-\d{2}-\d{2}',value) for value in (first,last)):
+            raise ValueError('Provide Start date and End date in YYYY-MM-DD format.')
+        start=datetime.strptime(first,'%Y-%m-%d').replace(tzinfo=local)
+        finish=datetime.strptime(last,'%Y-%m-%d').replace(tzinfo=local)
+        if finish<start:raise ValueError('End date must be on or after Start date.')
+        try:end=finish+timedelta(days=1)
+        except OverflowError:raise ValueError('Date range is outside the supported calendar.') from None
+    elif month:
         if not re.fullmatch(r'\d{4}-\d{2}',month):raise ValueError('Use a month in YYYY-MM format.')
         start=datetime.strptime(month+'-01','%Y-%m-%d').replace(tzinfo=local)
         try:end=start+timedelta(days=monthrange(start.year,start.month)[1])
@@ -55,15 +66,14 @@ def report(db, local, query):
         person=by_id[row['person_id']]
         if department is not None and person['department']!=department:continue
         stamp=datetime.fromisoformat(row['timestamp']).astimezone(local)
-        records.append({'id':row['id'],'person_id':person['id'],'name':person['name'],'barcode':person['barcode'],
+        records.append({'id':row['id'],'person_id':person['id'],'name':person['sort_name'],'barcode':person['barcode'],
                         'department':person['department'],'action':row['action'],'timestamp':row['timestamp'],'date':stamp.strftime('%Y-%m-%d')})
     # Stable grouping retains newest-first order within each employee.
     if sort=='department':records.sort(key=lambda r:(r['department'].casefold(),r['name'].casefold(),r['person_id']))
     elif sort=='person':records.sort(key=lambda r:(r['name'].casefold(),r['person_id']))
     elif sort=='last_name':
         records.sort(key=lambda r:(by_id[r['person_id']]['sort_name'].casefold(),r['person_id']))
-        people.sort(key=lambda p:(p['sort_name'].casefold(),p['id']))
-        for record in records:record['name']=by_id[record['person_id']]['sort_name']
+    people.sort(key=lambda p:(p['sort_name'].casefold(),p['id']))
     days=[]
     if month and selected:
         grouped={}
@@ -76,7 +86,7 @@ def report(db, local, query):
             current+=timedelta(days=1)
     return {'records':records,'days':days,'people':people,'departments':sorted({p['department'] for p in people},key=str.casefold),
             'employee':selected,'timezone':str(local),'today':datetime.now(local).strftime('%Y-%m-%d'),
-            'period':month or day,'mode':'month' if month else 'day','sort':sort}
+            'period':f'{first} to {last}' if range_requested else month or day,'mode':'range' if range_requested else 'month' if month else 'day','sort':sort}
 
 
 def safe_cell(value):
@@ -92,7 +102,7 @@ def export_csv(data,local,summary=False):
         if data['mode']!='month' or not data['employee']:raise ValueError('A monthly summary requires an employee selection.')
         person=data['employee']
         writer.writerow(['Date','Name','Department',f'First Time In ({local})',f'Last Time Out ({local})','Scans'])
-        for day in data['days']:writer.writerow([day['date'],safe_cell(person['name']),safe_cell(person['department']),clock(day['first_in']),clock(day['last_out']),day['scans']])
+        for day in data['days']:writer.writerow([day['date'],safe_cell(person['sort_name']),safe_cell(person['department']),clock(day['first_in']),clock(day['last_out']),day['scans']])
     else:
         writer.writerow(['Date','Name','Department','Barcode','Action',f'Time ({local})'])
         for record in data['records']:writer.writerow([record['date'],safe_cell(record['name']),safe_cell(record['department']),record['barcode'] or '',

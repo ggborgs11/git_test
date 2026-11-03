@@ -14,7 +14,7 @@ async function api(path, body) {
 function directory() {
   const query=$('search').value.trim().toLowerCase();
   const people=state.people.filter(p=>p.name.toLowerCase().includes(query)||String(p.barcode||'').includes(query));
-  $('directory').innerHTML=people.length?people.map(p=>`<div class="person"><span class="avatar">${esc(initials(p.name))}</span><div class="details"><b>${esc(p.name)}</b><small>${p.barcode?esc(p.barcode):'No barcode assigned'}</small></div><a class="profile-open" href="/admin/201?person=${p.id}">Edit 201 file</a>${p.barcode?`<span class="badge ${p.status==='out'?'out':''}">${p.status==='in'?'In':'Out'}</span>`:`<button type="button" class="profile-open" data-assign-id="${p.id}">Assign barcode</button>`}</div>`).join(''):'<p class="empty">No employees found. Create a 201 file first.</p>';
+  $('directory').innerHTML=people.length?people.map(p=>`<div class="person"><span class="avatar">${esc(initials(p.name))}</span><div class="details"><b>${esc(p.name)}</b><small>${p.barcode?esc(p.barcode):'No barcode assigned'}</small></div>${p.barcode?`<span class="badge ${p.status==='out'?'out':''}">${p.status==='in'?'In':'Out'}</span>`:`<button type="button" class="profile-open" data-assign-id="${p.id}">Assign barcode</button>`}</div>`).join(''):'<p class="empty">No employees found. Import employees using CSV.</p>';
 }
 
 function render() {
@@ -32,6 +32,7 @@ async function refresh() {
       render();$('connection').textContent='Connected';$('global-message').textContent='';return;
     }
     state=await api('/api/state');zone=state.timezone;todayEvents=state.events;
+    for(const id of ['records-start','records-end'])if(!$(id).value)$(id).value=state.today;
     if(!$('date').value)$('date').value=state.today;
     if(!$('records-month').value)$('records-month').value=state.today.slice(0,7);
     render();

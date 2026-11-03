@@ -292,10 +292,10 @@ class Handler(BaseHTTPRequestHandler):
                     writer.writerow([name, event['barcode'], 'Time In' if event['action']=='in' else 'Time Out',
                                      datetime.fromisoformat(event['timestamp']).astimezone(LOCAL).strftime('%Y-%m-%d %H:%M:%S')])
                 return self.reply(200, output.getvalue().encode('utf-8-sig'), 'text/csv; charset=utf-8')
-            if url.path in ('/admin', '/admin/', '/admin/201', '/admin/201/'):
-                filename = ('employees.html' if url.path.rstrip('/')=='/admin/201' else 'index.html') if self.authenticated() else 'login.html'
+            if url.path in ('/admin', '/admin/'):
+                filename = 'index.html' if self.authenticated() else 'login.html'
                 return self.reply(200, (ROOT / 'static' / filename).read_bytes(), 'text/html; charset=utf-8')
-            files = {'/': ('kiosk.html', 'text/html'), '/login.js': ('login.js', 'text/javascript'), '/app.js': ('app.js', 'text/javascript'), '/profile.js': ('profile.js', 'text/javascript'), '/employees.js': ('employees.js', 'text/javascript'), '/records.js': ('records.js', 'text/javascript'), '/style.css': ('style.css', 'text/css')}
+            files = {'/': ('kiosk.html', 'text/html'), '/login.js': ('login.js', 'text/javascript'), '/app.js': ('app.js', 'text/javascript'), '/records.js': ('records.js', 'text/javascript'), '/style.css': ('style.css', 'text/css')}
             if url.path not in files:
                 return self.reply(404, {'error': 'Not found'})
             filename, mime = files[url.path]

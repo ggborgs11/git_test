@@ -89,3 +89,44 @@ class ReportTests(HTTPFixture):
         self.assertEqual(self.request('/api/attendance?month=invalid',browser=self.browser)[0],400)
         self.request('/api/logout',{},self.browser)
         self.assertEqual(self.request('/api/attendance?month=2026-10',browser=self.browser)[0],401)
+
+    def test_inclusive_range_and_export(self):
+        with app.connect() as db:
+            for stamp in ['2026-09-30T15:59:59+00:00','2026-10-02T15:59:59+00:00','2026-10-02T16:00:00+00:00']:
+                db.execute('INSERT INTO events(person_id,action,timestamp) VALUES (1,?,?)',('out',stamp))
+        result=self.report({'start_date':'2026-10-01','end_date':'2026-10-02','person':'1'})
+        self.assertEqual(len(result['records']),3)
+        self.assertEqual({r['date'] for r in result['records']},{'2026-10-01','2026-10-02'})
+        self.assertEqual(len(self.report({'start_date':'2026-10-01','end_date':'2026-10-01','person':'1'})['records']),2)
+        rows=list(csv.reader(io.StringIO(attendance.export_csv(result,app.LOCAL).decode('utf-8-sig'))))
+        self.assertEqual(len(rows),4)
+        self.request('/api/login',{'password':'test-fixture-password'},self.browser)
+        self.assertEqual(self.request('/api/attendance?start_date=2026-10-01&end_date=2026-10-02&person=1',browser=self.browser)[0],200)
+
+    def test_invalid_ranges(self):
+        for query in [
+            {'start_date':'2026-10-01'}, {'end_date':'2026-10-01'},
+            {'start_date':'2026-10-02','end_date':'2026-10-01'},
+            {'start_date':'2026-02-30','end_date':'2026-03-01'},
+            {'start_date':'2026-10-01','end_date':'2026-10-02','month':'2026-10'},
+            {'start_date':'9999-12-31','end_date':'9999-12-31'}]:
+            with self.assertRaises(ValueError):self.report(query)
+
+    def test_names_for_every_sort_and_removed_screens_preserve_data(self):
+        with app.connect() as db:
+            db.execute('UPDATE employee_profiles SET details=? WHERE person_id=1',
+                       (json.dumps({'last_name':'Dela Cruz','first_name':'Alice','department':'Assembly'}),))
+        for sort in ['time','department','person','last_name']:
+            result=self.report({'date':'2026-10-01','person':'1','sort':sort})
+            self.assertTrue(all(r['name']=='Dela Cruz, Alice' for r in result['records']))
+            self.assertEqual(next(p for p in result['people'] if p['id']==1)['sort_name'],'Dela Cruz, Alice')
+        self.request('/api/login',{'password':'test-fixture-password'},self.browser)
+        for path in ['/admin/201','/admin/201/','/profile.js','/employees.js']:
+            self.assertEqual(self.request(path,browser=self.browser)[0],404)
+        html=self.request('/admin',browser=self.browser)[1]
+        self.assertNotIn(b'201 file',html)
+        self.assertIn(b'Start date',html);self.assertIn(b'End date',html)
+        with app.connect() as db:
+            self.assertEqual(db.execute('SELECT name FROM people WHERE id=1').fetchone()['name'],'Alice')
+            self.assertEqual(json.loads(db.execute('SELECT details FROM employee_profiles WHERE person_id=1').fetchone()['details'])['last_name'],'Dela Cruz')
+            self.assertEqual(db.execute('SELECT count(*) FROM events').fetchone()[0],7)

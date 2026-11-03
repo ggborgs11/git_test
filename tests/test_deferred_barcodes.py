@@ -61,7 +61,7 @@ class DeferredBarcodeAccessTests(HTTPFixture):
         status,body=self.request('/api/employees',{'name':'Employee','profile':{'employee_id':'001'}},self.browser)
         self.assertEqual(status,201);person=json.loads(body)['people'][0];self.assertIsNone(person['barcode'])
         self.assertEqual(self.request('/api/employees',{'name':'Bypass','barcode':'999999'},self.browser)[0],400)
-        self.assertIn(b'person-form',self.request('/admin/201',browser=self.browser)[1])
+        self.assertEqual(self.request('/admin/201',browser=self.browser)[0],404)
         self.assertNotIn(b'new-barcode',self.request('/admin/201',browser=self.browser)[1])
         self.assertNotIn(b'person-form',self.request('/admin',browser=self.browser)[1])
         status,body=self.request(f'/api/people/{person["id"]}/barcode',{'barcode':'001234'},self.browser)
