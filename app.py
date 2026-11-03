@@ -169,6 +169,25 @@ def assign_barcode(person_id,barcode=None):
         return {'id':person_id,'name':person['name'],'barcode':barcode}
 
 
+def assign_barcodes(person_ids):
+    if not isinstance(person_ids,list) or not 1<=len(person_ids)<=1000 or any(type(i) is not int or i<=0 for i in person_ids):
+        raise ValueError('Select between 1 and 1,000 employees.')
+    assigned=[];skipped=0
+    with LOCK,connect() as db:
+        for person_id in dict.fromkeys(person_ids):
+            person=db.execute('SELECT id,name,barcode FROM people WHERE id=?',(person_id,)).fetchone()
+            if not person:raise ValueError('Selected employee not found. Refresh and try again.')
+            if person['barcode']:
+                skipped+=1;continue
+            number=person_id
+            barcode=f'{number:06d}'
+            while db.execute('SELECT 1 FROM people WHERE barcode=?',(barcode,)).fetchone():
+                number+=1;barcode=f'{number:06d}'
+            db.execute('UPDATE people SET barcode=? WHERE id=?',(barcode,person_id))
+            assigned.append({'id':person_id,'name':person['name'],'barcode':barcode})
+    return {'people':assigned,'assigned':len(assigned),'skipped':skipped}
+
+
 def assign_department(person_ids, department):
     if not isinstance(person_ids,list) or not 1<=len(person_ids)<=1000 or any(type(i) is not int or i<=0 for i in person_ids):
         raise ValueError('Select between 1 and 1,000 employees.')
@@ -342,10 +361,10 @@ class Handler(BaseHTTPRequestHandler):
             employee_delete=re.fullmatch(r'/api/people/(\d+)/delete',self.path)
             profile_update=re.fullmatch(r'/api/people/(\d+)',self.path)
             barcode_update=re.fullmatch(r'/api/people/(\d+)/barcode',self.path)
-            if (employee_delete or profile_update or barcode_update or self.path in ('/api/people','/api/employees','/api/employees/department')) and not self.authenticated():
+            if (employee_delete or profile_update or barcode_update or self.path in ('/api/people','/api/employees','/api/employees/department','/api/employees/barcodes')) and not self.authenticated():
                 return self.reply(401,{'error':'Admin login required.'})
             length = int(self.headers.get('Content-Length', '0'))
-            limit=3000000 if (employee_delete or profile_update or barcode_update or self.path in ('/api/people','/api/employees','/api/employees/department')) else 200000
+            limit=3000000 if (employee_delete or profile_update or barcode_update or self.path in ('/api/people','/api/employees','/api/employees/department','/api/employees/barcodes')) else 200000
             if not 0 < length <= limit:
                 raise ValueError('Request is empty or too large.')
             if self.headers.get('Content-Type', '').split(';')[0] != 'application/json':
@@ -379,6 +398,8 @@ class Handler(BaseHTTPRequestHandler):
                     with AUTH_LOCK:
                         SESSIONS.pop(cookie['clockwork_admin'].value, None)
                 return self.reply(200, {'ok': True}, cookie='clockwork_admin=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0')
+            if self.path=='/api/employees/barcodes':
+                return self.reply(200,assign_barcodes(data.get('people')))
             if self.path=='/api/employees/department':
                 return self.reply(200,assign_department(data.get('people'),data.get('department')))
             if employee_delete:

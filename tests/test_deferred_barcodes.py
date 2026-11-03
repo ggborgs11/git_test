@@ -158,3 +158,26 @@ class DeferredBarcodeAccessTests(HTTPFixture):
             self.assertEqual(self.request(path,data,self.browser)[0],400)
         with app.connect() as db:
             self.assertEqual(app.profiles.get(db,people[0]['id'])['profile']['department'],'Production')
+
+    def test_auto_assign_multiple_barcodes_preserves_existing_and_rolls_back(self):
+        people=app.add_people([{'name':'Existing','barcode':'000002'},{'name':'A'},{'name':'B'}])
+        path='/api/employees/barcodes'
+        ids=[p['id'] for p in people]
+        self.assertEqual(self.request(path,{'people':ids})[0],401)
+        self.request('/api/login',{'password':'test-fixture-password'},self.browser)
+        self.assertEqual(self.request(path,{'people':ids},self.browser,origin='http://other.example')[0],403)
+        self.assertEqual(self.request(path,{'people':[ids[1],99999]},self.browser)[0],400)
+        with app.connect() as db:
+            self.assertIsNone(db.execute('SELECT barcode FROM people WHERE id=?',(ids[1],)).fetchone()[0])
+        status,body=self.request(path,{'people':ids+[ids[1]]},self.browser)
+        self.assertEqual(status,200)
+        result=json.loads(body);self.assertEqual(result['assigned'],2);self.assertEqual(result['skipped'],1)
+        with app.connect() as db:
+            barcodes=[r['barcode'] for r in db.execute('SELECT barcode FROM people ORDER BY id')]
+        self.assertEqual(barcodes[0],'000002');self.assertEqual(len(set(barcodes)),3)
+        self.assertTrue(all(code.isdigit() for code in barcodes))
+        for code in barcodes:self.assertEqual(self.request('/api/scan',{'barcode':code})[0],201)
+        result=json.loads(self.request(path,{'people':ids},self.browser)[1])
+        self.assertEqual(result['assigned'],0);self.assertEqual(result['skipped'],3)
+        for invalid in [[],[True],['1'],None]:
+            self.assertEqual(self.request(path,{'people':invalid},self.browser)[0],400)

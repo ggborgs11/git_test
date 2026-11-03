@@ -25,7 +25,10 @@ function allEmployees(){
   $('employees-count').textContent=`${people.length} of ${state.people.length} employees`;
   for(const id of selectedEmployees)if(!state.people.some(p=>p.id===id))selectedEmployees.delete(id);
   $('employees-selected').textContent=`${selectedEmployees.size} selected`;
-  if(!$('bulk-department-form').dataset.saving)$('bulk-department-save').disabled=selectedEmployees.size===0;
+  if(!$('bulk-department-form').dataset.saving){
+    $('bulk-department-save').disabled=selectedEmployees.size===0;
+    $('bulk-barcode-save').disabled=selectedEmployees.size===0;
+  }
   $('employees-list').innerHTML=people.length?people.map(p=>`<div class="person"><input class="employee-select" type="checkbox" data-select-id="${p.id}" aria-label="Select ${esc(p.name)}" ${selectedEmployees.has(p.id)?'checked':''}><div class="details"><b>${esc(p.name)}</b><small>${esc(p.department||'No department assigned')} · ${p.barcode?'Barcode '+esc(p.barcode):'No barcode assigned'}</small></div><button type="button" class="secondary" data-edit-id="${p.id}">Edit</button><button type="button" class="secondary" data-delete-id="${p.id}" aria-label="Delete ${esc(p.name)}">Delete</button></div>`).join(''):'<p class="empty">No employees found.</p>';
 }
 
