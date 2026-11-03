@@ -78,3 +78,5 @@ To correct a name or assign a department after CSV import, open **All employees 
 For bulk department assignment, open **All employees**, tick multiple employees (or use **Select matching employees** after searching), enter the department once, and choose **Apply department to selected**. The selected count includes employees selected under earlier searches. **Clear selection** unchecks everyone. Only department changes; attendance and other employee details remain intact.
 
 To generate barcodes automatically for multiple employees, open **All employees**, tick employees or choose **Select matching employees**, then click **Auto-assign barcodes**. Each employee without a barcode gets a unique numeric barcode. Existing barcodes are skipped and preserved. Print the resulting badges in **People & badges**.
+
+In **All employees**, **Select all employees** selects the entire directory, including employees hidden by a search. Use it before **Auto-assign barcodes** or bulk department assignment. **Clear selection** unchecks everyone.

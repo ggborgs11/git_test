@@ -6,6 +6,10 @@ vm.createContext(context);vm.runInContext(fs.readFileSync('static/bulk.js','utf8
 (async()=>{
   get('employees-search').value='001';get('employees-select-visible').listeners.click();
   assert.deepEqual([...context.selectedEmployees],[1]);
+  get('employees-select-all').listeners.click();
+  assert.deepEqual([...context.selectedEmployees],[1,2]);
+  get('employees-clear-selection').listeners.click();
+  get('employees-select-visible').listeners.click();
   get('bulk-department').value='Production';fail=true;
   await get('bulk-department-form').listeners.submit({preventDefault(){}});
   assert.equal(context.selectedEmployees.size,1);assert.equal(get('bulk-department-message').textContent,'Failed');

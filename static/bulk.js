@@ -6,6 +6,11 @@ if(admin){
     if(box.checked)selectedEmployees.add(id);else selectedEmployees.delete(id);
     allEmployees();
   });
+  $('employees-select-all').addEventListener('click',()=>{
+    if(savingDepartment)return;
+    for(const person of state.people)selectedEmployees.add(person.id);
+    allEmployees();
+  });
   $('employees-select-visible').addEventListener('click',()=>{
     if(savingDepartment)return;
     const query=$('employees-search').value.trim().toLowerCase();
