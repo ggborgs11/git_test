@@ -69,3 +69,20 @@ class DeferredBarcodeAccessTests(HTTPFixture):
         self.assertEqual(self.request('/api/scan',{'barcode':'001234'})[0],201)
         self.request('/api/logout',{},self.browser)
         self.assertEqual(self.request('/api/employees',browser=self.browser)[0],401)
+
+    def test_add_employee_from_people_and_badges(self):
+        self.request('/api/login',{'password':'test-fixture-password'},self.browser)
+        html=self.request('/admin',browser=self.browser)[1]
+        for field in [b'add-employee-form',b'employee-last-name',b'employee-first-name',b'employee-department']:
+            self.assertIn(field,html)
+        payload={'name':'Dela Cruz, Ana','profile':{'last_name':'Dela Cruz','first_name':'Ana','department':'Assembly'}}
+        status,body=self.request('/api/employees',payload,self.browser)
+        self.assertEqual(status,201)
+        person=json.loads(body)['people'][0]
+        self.assertIsNone(person['barcode'])
+        people=json.loads(self.request('/api/employees',browser=self.browser)[1])['people']
+        self.assertEqual(people[0]['sort_name'],'Dela Cruz, Ana')
+        status,body=self.request('/api/people/'+str(person['id'])+'/barcode',{},self.browser)
+        self.assertEqual(status,200)
+        self.assertEqual(self.request('/api/scan',{'barcode':json.loads(body)['barcode']})[0],201)
+        self.assertEqual(self.request('/api/employees',{'name':'   '},self.browser)[0],400)

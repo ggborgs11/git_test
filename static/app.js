@@ -14,7 +14,7 @@ async function api(path, body) {
 function directory() {
   const query=$('search').value.trim().toLowerCase();
   const people=state.people.filter(p=>p.name.toLowerCase().includes(query)||String(p.barcode||'').includes(query));
-  $('directory').innerHTML=people.length?people.map(p=>`<div class="person"><span class="avatar">${esc(initials(p.name))}</span><div class="details"><b>${esc(p.name)}</b><small>${p.barcode?esc(p.barcode):'No barcode assigned'}</small></div>${p.barcode?`<span class="badge ${p.status==='out'?'out':''}">${p.status==='in'?'In':'Out'}</span>`:`<button type="button" class="profile-open" data-assign-id="${p.id}">Assign barcode</button>`}</div>`).join(''):'<p class="empty">No employees found. Import employees using CSV.</p>';
+  $('directory').innerHTML=people.length?people.map(p=>`<div class="person"><span class="avatar">${esc(initials(p.name))}</span><div class="details"><b>${esc(p.name)}</b><small>${p.barcode?esc(p.barcode):'No barcode assigned'}</small></div>${p.barcode?`<span class="badge ${p.status==='out'?'out':''}">${p.status==='in'?'In':'Out'}</span>`:`<button type="button" class="profile-open" data-assign-id="${p.id}">Assign barcode</button>`}</div>`).join(''):'<p class="empty">No employees found. Add an employee or import a CSV.</p>';
 }
 
 function render() {
@@ -172,4 +172,28 @@ if(admin){
   }
   $('barcode-form').addEventListener('submit',event=>{event.preventDefault();saveBarcode(false);});
   $('assign-generate').addEventListener('click',()=>saveBarcode(true));
+}
+
+if(admin){
+  let addingEmployee=false;
+  $('add-employee-form').addEventListener('submit',async event=>{
+    event.preventDefault();
+    if(addingEmployee)return;
+    const last=$('employee-last-name').value.trim();
+    const first=$('employee-first-name').value.trim();
+    if(!last||!first){$('add-employee-message').textContent='Enter both Last name and First name.';return;}
+    addingEmployee=true;$('add-employee-save').disabled=true;
+    $('add-employee-message').textContent='Adding employee…';
+    try{
+      const result=await api('/api/employees',{
+        name:`${last}, ${first}`,
+        profile:{last_name:last,first_name:first,department:$('employee-department').value.trim()}
+      });
+      $('add-employee-form').reset();
+      $('search').value='';
+      $('add-employee-message').textContent=`Added ${result.people[0].name}. Choose Assign barcode in the directory to enable scanning.`;
+      await refresh();
+    }catch(e){$('add-employee-message').textContent=e.message;}
+    finally{addingEmployee=false;$('add-employee-save').disabled=false;}
+  });
 }
