@@ -22,7 +22,7 @@ function allEmployees(){
   const people=state.people.filter(p=>p.name.toLowerCase().includes(query)||String(p.barcode||'').includes(query))
     .sort((a,b)=>a.name.localeCompare(b.name)||a.id-b.id);
   $('employees-count').textContent=`${people.length} of ${state.people.length} employees`;
-  $('employees-list').innerHTML=people.length?people.map(p=>`<div class="person"><div class="details"><b>${esc(p.name)}</b><small>${p.barcode?'Barcode '+esc(p.barcode):'No barcode assigned'}</small></div><button type="button" class="secondary" data-delete-id="${p.id}" aria-label="Delete ${esc(p.name)}">Delete</button></div>`).join(''):'<p class="empty">No employees found.</p>';
+  $('employees-list').innerHTML=people.length?people.map(p=>`<div class="person"><div class="details"><b>${esc(p.name)}</b><small>${esc(p.department||'No department assigned')} · ${p.barcode?'Barcode '+esc(p.barcode):'No barcode assigned'}</small></div><button type="button" class="secondary" data-edit-id="${p.id}">Edit</button><button type="button" class="secondary" data-delete-id="${p.id}" aria-label="Delete ${esc(p.name)}">Delete</button></div>`).join(''):'<p class="empty">No employees found.</p>';
 }
 
 function render() {
@@ -41,6 +41,9 @@ async function refresh() {
       render();$('connection').textContent='Connected';$('global-message').textContent='';return;
     }
     state=await api('/api/state');zone=state.timezone;todayEvents=state.events;
+    const employees=await api('/api/employees');
+    const details=new Map(employees.people.map(p=>[p.id,p]));
+    state.people=state.people.map(p=>({...p,department:details.get(p.id)?.department||''}));
     for(const id of ['records-start','records-end'])if(!$(id).value)$(id).value=state.today;
     if(!$('date').value)$('date').value=state.today;
     if(!$('records-month').value)$('records-month').value=state.today.slice(0,7);
@@ -206,6 +209,51 @@ if(admin){
       await refresh();
     }catch(e){$('add-employee-message').textContent=e.message;}
     finally{addingEmployee=false;$('add-employee-save').disabled=false;}
+  });
+}
+
+if(admin){
+  let editingEmployee=null,savingEmployee=false,editRequest=0;
+  $('employees-list').addEventListener('click',async event=>{
+    const button=event.target.closest('[data-edit-id]');
+    if(!button||savingEmployee)return;
+    const request=++editRequest;
+    $('employee-edit-form').hidden=false;
+    editingEmployee=null;$('employee-edit-save').disabled=true;
+    $('employee-edit-message').textContent='Loading employee…';
+    try{
+      const person=await api('/api/people/'+Number(button.dataset.editId));
+      if(request!==editRequest)return;
+      editingEmployee=person;
+      $('edit-name').value=person.name;
+      $('edit-department').value=person.profile.department||'';
+      $('employee-edit-message').textContent='';
+      $('employee-edit-save').disabled=false;
+      $('employee-edit-form').scrollIntoView({block:'center'});$('edit-name').focus();
+    }catch(e){if(request===editRequest)$('employee-edit-message').textContent=e.message;}
+  });
+  $('employee-edit-cancel').addEventListener('click',()=>{
+    if(savingEmployee)return;
+    ++editRequest;editingEmployee=null;$('employee-edit-form').hidden=true;
+  });
+  $('employee-edit-form').addEventListener('submit',async event=>{
+    event.preventDefault();if(!editingEmployee||savingEmployee)return;
+    const name=$('edit-name').value.trim();
+    if(!name){$('employee-edit-message').textContent='Enter an employee name.';return;}
+    const profile={...editingEmployee.profile,department:$('edit-department').value.trim()};
+    if(name!==editingEmployee.name){
+      const comma=name.indexOf(',');
+      profile.last_name=comma>=0?name.slice(0,comma).trim():'';
+      profile.first_name=comma>=0?name.slice(comma+1).trim():'';
+    }
+    savingEmployee=true;$('employee-edit-save').disabled=true;$('employee-edit-cancel').disabled=true;
+    try{
+      await api('/api/people/'+editingEmployee.id,{name,profile,version:editingEmployee.version});
+      $('employees-message').textContent=`Saved ${name}.`;
+      $('employee-edit-form').hidden=true;editingEmployee=null;
+      await refresh();
+    }catch(e){$('employee-edit-message').textContent=e.message;}
+    finally{savingEmployee=false;$('employee-edit-save').disabled=false;$('employee-edit-cancel').disabled=false;}
   });
 }
 

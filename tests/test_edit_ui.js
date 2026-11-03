@@ -1,0 +1,20 @@
+const fs=require('node:fs'),vm=require('node:vm'),assert=require('node:assert/strict');
+const source=fs.readFileSync('static/app.js','utf8');
+const elements={};const get=id=>elements[id]??={hidden:true,value:'',disabled:false,textContent:'',listeners:{},addEventListener(type,fn){this.listeners[type]=fn;},scrollIntoView(){},focus(){}};
+let fail=false,saved;
+const original={id:1,name:'Santos, Maria',version:2,profile:{last_name:'Santos',first_name:'Maria',other_information:'Preserve',department:''}};
+const context={admin:true,$:get,api:async(path,body)=>{assert.equal(path,'/api/people/1');if(!body)return original;if(fail)throw Error('Save failed');saved=body;return {};},refresh:async()=>{}};
+vm.createContext(context);
+vm.runInContext(source.slice(source.indexOf('if(admin){\n  let editingEmployee='),source.indexOf('if(admin){\n  let deletingEmployee=')),context);
+(async()=>{
+  await get('employees-list').listeners.click({target:{closest:()=>({dataset:{editId:'1'}})}});
+  assert.equal(get('edit-name').value,'Santos, Maria');assert.equal(get('employee-edit-form').hidden,false);
+  get('edit-name').value='Santos, Maria Ana';get('edit-department').value='Assembly';
+  fail=true;await get('employee-edit-form').listeners.submit({preventDefault(){}});
+  assert.equal(get('employee-edit-form').hidden,false);assert.equal(get('employee-edit-message').textContent,'Save failed');
+  fail=false;await get('employee-edit-form').listeners.submit({preventDefault(){}});
+  assert.equal(saved.profile.first_name,'Maria Ana');assert.equal(saved.profile.department,'Assembly');
+  assert.equal(saved.profile.other_information,'Preserve');assert.equal(saved.version,2);
+  assert.equal(get('employee-edit-form').hidden,true);
+  console.log('Employee edit UI: load, save, name formatting, data preservation, failure and retry passed');
+})().catch(error=>{console.error(error);process.exitCode=1;});

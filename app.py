@@ -190,6 +190,7 @@ def employee_list():
             person=dict(row)
             details=json.loads(person.pop('details') or '{}')
             person.update(attendance.name_fields(person['name'],details))
+            person['department']=details.get('department','')
             result.append(person)
         return result
 

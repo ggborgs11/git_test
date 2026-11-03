@@ -114,3 +114,24 @@ class DeferredBarcodeAccessTests(HTTPFixture):
         html=self.request('/admin',browser=self.browser)[1]
         for marker in [b'data-view="employees"',b'id="employees-search"',b'id="employees-list"',b'class="employee-scroll"',b'id="delete-confirm"',b'id="delete-cancel"',b'id="delete-error"']:
             self.assertIn(marker,html)
+
+    def test_edit_imported_employee_department_preserves_history(self):
+        person=app.add_people([{'name':'Dela Cruz, Juan','barcode':'000101','profile':{'employee_id':'E1','other_information':'Keep notes'}}])[0]
+        app.scan('000101')
+        self.request('/api/login',{'password':'test-fixture-password'},self.browser)
+        path='/api/people/'+str(person['id'])
+        current=json.loads(self.request(path,browser=self.browser)[1])
+        payload={'name':'Dela Cruz, Juan Carlos','profile':{**current['profile'],'department':'Production','last_name':'Dela Cruz','first_name':'Juan Carlos'},'version':current['version']}
+        self.assertEqual(self.request(path,payload)[0],401)
+        status,body=self.request(path,payload,self.browser)
+        self.assertEqual(status,200)
+        saved=json.loads(body)
+        self.assertEqual(saved['barcode'],'000101')
+        self.assertEqual(saved['profile']['other_information'],'Keep notes')
+        self.assertEqual(saved['profile']['employee_id'],'E1')
+        people=json.loads(self.request('/api/employees',browser=self.browser)[1])['people']
+        self.assertEqual(people[0]['department'],'Production')
+        self.assertEqual(people[0]['sort_name'],'Dela Cruz, Juan Carlos')
+        self.assertEqual(self.request(path,payload,self.browser)[0],400)
+        with app.connect() as db:
+            self.assertEqual(db.execute('SELECT count(*) FROM events WHERE person_id=?',(person['id'],)).fetchone()[0],1)
