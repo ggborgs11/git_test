@@ -135,3 +135,26 @@ class DeferredBarcodeAccessTests(HTTPFixture):
         self.assertEqual(self.request(path,payload,self.browser)[0],400)
         with app.connect() as db:
             self.assertEqual(db.execute('SELECT count(*) FROM events WHERE person_id=?',(person['id'],)).fetchone()[0],1)
+
+    def test_bulk_department_updates_are_atomic_and_preserve_employee_data(self):
+        people=app.add_people([{'name':'A','barcode':'001','profile':{'employee_id':'E1','other_information':'Keep'}},{'name':'B'},{'name':'C','profile':{'department':'Quality'}}])
+        app.scan('001')
+        path='/api/employees/department'
+        payload={'people':[people[0]['id'],people[1]['id']],'department':'Production'}
+        self.assertEqual(self.request(path,payload)[0],401)
+        self.request('/api/login',{'password':'test-fixture-password'},self.browser)
+        self.assertEqual(self.request(path,payload,self.browser,origin='http://other.example')[0],403)
+        status,body=self.request(path,payload,self.browser)
+        self.assertEqual(status,200);self.assertEqual(json.loads(body)['updated'],2)
+        with app.connect() as db:
+            first=app.profiles.get(db,people[0]['id'])
+            self.assertEqual(first['profile']['department'],'Production')
+            self.assertEqual(first['profile']['employee_id'],'E1')
+            self.assertEqual(first['profile']['other_information'],'Keep')
+            self.assertEqual(first['barcode'],'001')
+            self.assertEqual(app.profiles.get(db,people[2]['id'])['profile']['department'],'Quality')
+            self.assertEqual(db.execute('SELECT count(*) FROM events').fetchone()[0],1)
+        for data in [{'people':[],'department':'A'},{'people':[True],'department':'A'},{'people':[1],'department':''},{'people':[people[0]['id'],9999],'department':'Changed'}]:
+            self.assertEqual(self.request(path,data,self.browser)[0],400)
+        with app.connect() as db:
+            self.assertEqual(app.profiles.get(db,people[0]['id'])['profile']['department'],'Production')

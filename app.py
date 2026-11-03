@@ -169,6 +169,22 @@ def assign_barcode(person_id,barcode=None):
         return {'id':person_id,'name':person['name'],'barcode':barcode}
 
 
+def assign_department(person_ids, department):
+    if not isinstance(person_ids,list) or not 1<=len(person_ids)<=1000 or any(type(i) is not int or i<=0 for i in person_ids):
+        raise ValueError('Select between 1 and 1,000 employees.')
+    if not isinstance(department,str) or not department.strip() or len(department.strip())>250:
+        raise ValueError('Enter a department of 1–250 characters.')
+    person_ids=list(dict.fromkeys(person_ids))
+    with LOCK,connect() as db:
+        for person_id in person_ids:
+            current=profiles.get(db,person_id)
+            details={**current['profile'],'department':department.strip()}
+            db.execute('INSERT INTO employee_profiles(person_id,employee_id,details,version) VALUES (?,?,?,?) '
+                       'ON CONFLICT(person_id) DO UPDATE SET details=excluded.details,version=excluded.version',
+                       (person_id,details.get('employee_id') or None,json.dumps(details),current['version']+1))
+    return {'updated':len(person_ids),'department':department.strip()}
+
+
 def delete_employee(person_id):
     with LOCK, connect() as db:
         person=db.execute('SELECT name FROM people WHERE id=?',(person_id,)).fetchone()
@@ -309,7 +325,7 @@ class Handler(BaseHTTPRequestHandler):
             if url.path in ('/admin', '/admin/'):
                 filename = 'index.html' if self.authenticated() else 'login.html'
                 return self.reply(200, (ROOT / 'static' / filename).read_bytes(), 'text/html; charset=utf-8')
-            files = {'/': ('kiosk.html', 'text/html'), '/login.js': ('login.js', 'text/javascript'), '/app.js': ('app.js', 'text/javascript'), '/records.js': ('records.js', 'text/javascript'), '/style.css': ('style.css', 'text/css')}
+            files = {'/': ('kiosk.html', 'text/html'), '/login.js': ('login.js', 'text/javascript'), '/app.js': ('app.js', 'text/javascript'), '/bulk.js': ('bulk.js', 'text/javascript'), '/records.js': ('records.js', 'text/javascript'), '/style.css': ('style.css', 'text/css')}
             if url.path not in files:
                 return self.reply(404, {'error': 'Not found'})
             filename, mime = files[url.path]
@@ -326,10 +342,10 @@ class Handler(BaseHTTPRequestHandler):
             employee_delete=re.fullmatch(r'/api/people/(\d+)/delete',self.path)
             profile_update=re.fullmatch(r'/api/people/(\d+)',self.path)
             barcode_update=re.fullmatch(r'/api/people/(\d+)/barcode',self.path)
-            if (employee_delete or profile_update or barcode_update or self.path in ('/api/people','/api/employees')) and not self.authenticated():
+            if (employee_delete or profile_update or barcode_update or self.path in ('/api/people','/api/employees','/api/employees/department')) and not self.authenticated():
                 return self.reply(401,{'error':'Admin login required.'})
             length = int(self.headers.get('Content-Length', '0'))
-            limit=3000000 if (employee_delete or profile_update or barcode_update or self.path in ('/api/people','/api/employees')) else 200000
+            limit=3000000 if (employee_delete or profile_update or barcode_update or self.path in ('/api/people','/api/employees','/api/employees/department')) else 200000
             if not 0 < length <= limit:
                 raise ValueError('Request is empty or too large.')
             if self.headers.get('Content-Type', '').split(';')[0] != 'application/json':
@@ -363,6 +379,8 @@ class Handler(BaseHTTPRequestHandler):
                     with AUTH_LOCK:
                         SESSIONS.pop(cookie['clockwork_admin'].value, None)
                 return self.reply(200, {'ok': True}, cookie='clockwork_admin=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0')
+            if self.path=='/api/employees/department':
+                return self.reply(200,assign_department(data.get('people'),data.get('department')))
             if employee_delete:
                 if data.get('confirm') is not True:
                     raise ValueError('Confirm employee deletion.')

@@ -81,3 +81,5 @@ main{padding-top:12px}nav{margin-top:0}
 .employee-scroll{max-height:65vh;overflow-y:auto;overscroll-behavior:contain;scrollbar-gutter:stable}.employee-scroll .person{gap:16px}.employee-scroll .details{min-width:0;overflow-wrap:anywhere}.employee-scroll button{flex-shrink:0}
 
 .delete-overlay{position:fixed;inset:0;z-index:1000;background:#0008;display:flex;align-items:center;justify-content:center;padding:20px}.delete-confirmation{width:min(100%,520px);max-height:90vh;overflow:auto}.delete-confirmation h2{margin-top:0}.delete-confirmation p{overflow-wrap:anywhere;line-height:1.6}#delete-confirm{background:#a33c26}#delete-error{color:#a33c26}
+
+.employee-select{width:20px;height:20px;flex-shrink:0}#bulk-department-form{margin:20px 0}#bulk-department-form .primary{width:auto}

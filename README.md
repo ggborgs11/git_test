@@ -63,6 +63,8 @@ python3 -m unittest discover -s tests -v
 node --check static/app.js
 node tests/test_delete_ui.js
 node tests/test_edit_ui.js
+node tests/test_bulk_ui.js
+node --check static/bulk.js
 ```
 
 Tests cover 300 people, automatic In/Out transitions, the 30-second duplicate window, concurrent scans, restart persistence, atomic import, unknown barcodes, leading zeros, and Manila date boundaries. Access tests cover admin login/logout, session expiry, protected APIs, and the public kiosk. 201-file tests cover creation/editing, legacy database upgrades, employee ID uniqueness, image validation/removal, stale edit protection, profile/image access controls, barcode-free creation, deferred manual/generated assignment, uniqueness, and migration of older databases. Attendance report tests cover department grouping/filtering, employee/month selection, Manila month boundaries, leap months, full-day summaries, matching CSV exports, and access controls. Physical scanner and printer verification require your devices.
@@ -72,3 +74,5 @@ In **People & badges**, choose **Delete** beside an employee to permanently remo
 The **All employees** tab provides a searchable, scrollable directory with a **Delete** button beside each employee. Click **Delete permanently** in the on-page confirmation to permanently delete the selected employee and their attendance records.
 
 To correct a name or assign a department after CSV import, open **All employees → Edit**, change the name and/or department, and choose **Save changes**. Existing barcodes, attendance, images, and other stored employee details are preserved.
+
+For bulk department assignment, open **All employees**, tick multiple employees (or use **Select matching employees** after searching), enter the department once, and choose **Apply department to selected**. The selected count includes employees selected under earlier searches. **Clear selection** unchecks everyone. Only department changes; attendance and other employee details remain intact.
