@@ -64,3 +64,5 @@ node --check static/app.js
 ```
 
 Tests cover 300 people, automatic In/Out transitions, the 30-second duplicate window, concurrent scans, restart persistence, atomic import, unknown barcodes, leading zeros, and Manila date boundaries. Access tests cover admin login/logout, session expiry, protected APIs, and the public kiosk. 201-file tests cover creation/editing, legacy database upgrades, employee ID uniqueness, image validation/removal, stale edit protection, profile/image access controls, barcode-free creation, deferred manual/generated assignment, uniqueness, and migration of older databases. Attendance report tests cover department grouping/filtering, employee/month selection, Manila month boundaries, leap months, full-day summaries, matching CSV exports, and access controls. Physical scanner and printer verification require your devices.
+
+In **People & badges**, choose **Delete** beside an employee to permanently remove that employee and their attendance records, details, images, and barcode. A confirmation is required. Other employees are unchanged. Back up the database before deleting records you may need later.

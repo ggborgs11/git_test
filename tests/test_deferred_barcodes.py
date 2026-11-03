@@ -86,3 +86,23 @@ class DeferredBarcodeAccessTests(HTTPFixture):
         self.assertEqual(status,200)
         self.assertEqual(self.request('/api/scan',{'barcode':json.loads(body)['barcode']})[0],201)
         self.assertEqual(self.request('/api/employees',{'name':'   '},self.browser)[0],400)
+
+    def test_delete_employee_requires_admin_confirmation_and_keeps_others(self):
+        people=app.add_people([{'name':'Remove','barcode':'123'},{'name':'Keep','barcode':'456'}])
+        removed,kept=people
+        app.scan('123');app.scan('456')
+        path='/api/people/'+str(removed['id'])+'/delete'
+        self.assertEqual(self.request(path,{'confirm':True})[0],401)
+        self.request('/api/login',{'password':'test-fixture-password'},self.browser)
+        self.assertEqual(self.request(path,{},self.browser)[0],400)
+        self.assertEqual(self.request(path,{'confirm':True},self.browser,origin='http://other.example')[0],403)
+        self.assertEqual(self.request(path,{'confirm':True},self.browser)[0],200)
+        self.assertEqual(self.request(path,{'confirm':True},self.browser)[0],400)
+        with app.connect() as db:
+            self.assertEqual(db.execute('SELECT id FROM people').fetchall()[0]['id'],kept['id'])
+            self.assertEqual(db.execute('SELECT count(*) FROM people').fetchone()[0],1)
+            self.assertEqual(db.execute('SELECT person_id FROM events').fetchone()[0],kept['id'])
+            self.assertEqual(db.execute('SELECT count(*) FROM events').fetchone()[0],1)
+            self.assertIsNone(db.execute('SELECT * FROM employee_profiles WHERE person_id=?',(removed['id'],)).fetchone())
+            self.assertEqual(list(db.execute('PRAGMA foreign_key_check')),[])
+        with self.assertRaises(ValueError):app.scan('123')

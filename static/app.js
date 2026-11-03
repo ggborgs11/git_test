@@ -14,7 +14,7 @@ async function api(path, body) {
 function directory() {
   const query=$('search').value.trim().toLowerCase();
   const people=state.people.filter(p=>p.name.toLowerCase().includes(query)||String(p.barcode||'').includes(query));
-  $('directory').innerHTML=people.length?people.map(p=>`<div class="person"><span class="avatar">${esc(initials(p.name))}</span><div class="details"><b>${esc(p.name)}</b><small>${p.barcode?esc(p.barcode):'No barcode assigned'}</small></div>${p.barcode?`<span class="badge ${p.status==='out'?'out':''}">${p.status==='in'?'In':'Out'}</span>`:`<button type="button" class="profile-open" data-assign-id="${p.id}">Assign barcode</button>`}</div>`).join(''):'<p class="empty">No employees found. Add an employee or import a CSV.</p>';
+  $('directory').innerHTML=people.length?people.map(p=>`<div class="person"><span class="avatar">${esc(initials(p.name))}</span><div class="details"><b>${esc(p.name)}</b><small>${p.barcode?esc(p.barcode):'No barcode assigned'}</small></div>${p.barcode?`<span class="badge ${p.status==='out'?'out':''}">${p.status==='in'?'In':'Out'}</span>`:`<button type="button" class="profile-open" data-assign-id="${p.id}">Assign barcode</button>`}<button type="button" class="secondary" data-delete-id="${p.id}">Delete</button></div>`).join(''):'<p class="empty">No employees found. Add an employee or import a CSV.</p>';
 }
 
 function render() {
@@ -151,6 +151,7 @@ if(admin&&location.hash==='#people')document.querySelector('[data-view=people]')
 
 if(admin){
   let assignmentId=null,assigning=false;
+  $('directory').addEventListener('employee-deleted',()=>{assignmentId=null;});
   $('directory').addEventListener('click',event=>{
     const button=event.target.closest('[data-assign-id]');if(!button||assigning)return;
     const person=state.people.find(p=>p.id===Number(button.dataset.assignId));if(!person)return;
@@ -195,5 +196,26 @@ if(admin){
       await refresh();
     }catch(e){$('add-employee-message').textContent=e.message;}
     finally{addingEmployee=false;$('add-employee-save').disabled=false;}
+  });
+}
+
+if(admin){
+  let deletingEmployee=false;
+  $('directory').addEventListener('click',async event=>{
+    const button=event.target.closest('[data-delete-id]');
+    if(!button||deletingEmployee)return;
+    const person=state.people.find(p=>p.id===Number(button.dataset.deleteId));
+    if(!person)return;
+    if(!window.confirm(`Permanently delete ${person.name}? This removes their employee details, barcode, images, and all attendance records. This cannot be undone.`))return;
+    deletingEmployee=true;button.disabled=true;
+    try{
+      await api('/api/people/'+person.id+'/delete',{confirm:true});
+      $('assignment-message').textContent=`Deleted ${person.name} and their attendance records.`;
+      $('directory').dispatchEvent(new Event('employee-deleted'));
+      $('assign-name').value='';$('assign-barcode').value='';
+      $('assign-save').disabled=true;$('assign-generate').disabled=true;
+      await refresh();
+    }catch(e){$('assignment-message').textContent=e.message;}
+    finally{deletingEmployee=false;button.disabled=false;}
   });
 }

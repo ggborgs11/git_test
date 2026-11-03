@@ -169,6 +169,19 @@ def assign_barcode(person_id,barcode=None):
         return {'id':person_id,'name':person['name'],'barcode':barcode}
 
 
+def delete_employee(person_id):
+    with LOCK, connect() as db:
+        person=db.execute('SELECT name FROM people WHERE id=?',(person_id,)).fetchone()
+        if not person:
+            raise ValueError('Employee not found.')
+        # Delete related rows and the employee together, or roll back everything.
+        db.execute('DELETE FROM events WHERE person_id=?',(person_id,))
+        db.execute('DELETE FROM employee_images WHERE person_id=?',(person_id,))
+        db.execute('DELETE FROM employee_profiles WHERE person_id=?',(person_id,))
+        db.execute('DELETE FROM people WHERE id=?',(person_id,))
+        return {'ok':True,'name':person['name']}
+
+
 def employee_list():
     with connect() as db:
         result=[]
@@ -309,12 +322,13 @@ class Handler(BaseHTTPRequestHandler):
         if origin and origin != 'http://' + self.headers.get('Host', ''):
             return self.reply(403, {'error': 'Cross-origin requests are not allowed.'})
         try:
+            employee_delete=re.fullmatch(r'/api/people/(\d+)/delete',self.path)
             profile_update=re.fullmatch(r'/api/people/(\d+)',self.path)
             barcode_update=re.fullmatch(r'/api/people/(\d+)/barcode',self.path)
-            if (profile_update or barcode_update or self.path in ('/api/people','/api/employees')) and not self.authenticated():
+            if (employee_delete or profile_update or barcode_update or self.path in ('/api/people','/api/employees')) and not self.authenticated():
                 return self.reply(401,{'error':'Admin login required.'})
             length = int(self.headers.get('Content-Length', '0'))
-            limit=3000000 if (profile_update or barcode_update or self.path in ('/api/people','/api/employees')) else 200000
+            limit=3000000 if (employee_delete or profile_update or barcode_update or self.path in ('/api/people','/api/employees')) else 200000
             if not 0 < length <= limit:
                 raise ValueError('Request is empty or too large.')
             if self.headers.get('Content-Type', '').split(';')[0] != 'application/json':
@@ -348,6 +362,10 @@ class Handler(BaseHTTPRequestHandler):
                     with AUTH_LOCK:
                         SESSIONS.pop(cookie['clockwork_admin'].value, None)
                 return self.reply(200, {'ok': True}, cookie='clockwork_admin=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0')
+            if employee_delete:
+                if data.get('confirm') is not True:
+                    raise ValueError('Confirm employee deletion.')
+                return self.reply(200,delete_employee(int(employee_delete[1])))
             if barcode_update:
                 return self.reply(200,assign_barcode(int(barcode_update[1]),data.get('barcode')))
             if self.path=='/api/employees':
