@@ -61,10 +61,11 @@ Records persist in `data/attendance.db` (ignored by Git). Set `ATTENDANCE_DB` to
 ```sh
 python3 -m unittest discover -s tests -v
 node --check static/app.js
+node tests/test_delete_ui.js
 ```
 
 Tests cover 300 people, automatic In/Out transitions, the 30-second duplicate window, concurrent scans, restart persistence, atomic import, unknown barcodes, leading zeros, and Manila date boundaries. Access tests cover admin login/logout, session expiry, protected APIs, and the public kiosk. 201-file tests cover creation/editing, legacy database upgrades, employee ID uniqueness, image validation/removal, stale edit protection, profile/image access controls, barcode-free creation, deferred manual/generated assignment, uniqueness, and migration of older databases. Attendance report tests cover department grouping/filtering, employee/month selection, Manila month boundaries, leap months, full-day summaries, matching CSV exports, and access controls. Physical scanner and printer verification require your devices.
 
-In **People & badges**, choose **Delete** beside an employee to permanently remove that employee and their attendance records, details, images, and barcode. A confirmation is required. Other employees are unchanged. Back up the database before deleting records you may need later.
+In **People & badges**, choose **Delete** beside an employee to permanently remove that employee and their attendance records, details, images, and barcode. An on-page confirmation is required: choose **Delete permanently** to proceed or **Cancel** to keep the employee. Other employees are unchanged. Back up the database before deleting records you may need later.
 
-The **All employees** tab provides a searchable, scrollable directory with a **Delete** button beside each employee. Confirm the popup to permanently delete the selected employee and their attendance records.
+The **All employees** tab provides a searchable, scrollable directory with a **Delete** button beside each employee. Click **Delete permanently** in the on-page confirmation to permanently delete the selected employee and their attendance records.

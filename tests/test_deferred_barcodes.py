@@ -112,5 +112,5 @@ class DeferredBarcodeAccessTests(HTTPFixture):
         self.assertNotIn(b'id="employees-list"',self.request('/admin')[1])
         self.request('/api/login',{'password':'test-fixture-password'},self.browser)
         html=self.request('/admin',browser=self.browser)[1]
-        for marker in [b'data-view="employees"',b'id="employees-search"',b'id="employees-list"',b'class="employee-scroll"']:
+        for marker in [b'data-view="employees"',b'id="employees-search"',b'id="employees-list"',b'class="employee-scroll"',b'id="delete-confirm"',b'id="delete-cancel"',b'id="delete-error"']:
             self.assertIn(marker,html)

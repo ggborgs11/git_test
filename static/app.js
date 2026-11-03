@@ -210,23 +210,58 @@ if(admin){
 }
 
 if(admin){
-  let deletingEmployee=false;
-  document.addEventListener('click',async event=>{
+  let deletingEmployee=false,pendingDeletion=null,deleteMessage=null,deleteTrigger=null;
+  function closeDeletion(){
+    if(deletingEmployee)return;
+    $('delete-overlay').hidden=true;
+    pendingDeletion=null;
+    if(deleteTrigger&&deleteTrigger.isConnected)deleteTrigger.focus();
+  }
+  document.addEventListener('click',event=>{
     const button=event.target.closest('[data-delete-id]');
-    if(!button||deletingEmployee)return;
+    if(!button||deletingEmployee||!$('delete-overlay').hidden)return;
     const person=state.people.find(p=>p.id===Number(button.dataset.deleteId));
     if(!person)return;
-    if(!window.confirm(`Permanently delete ${person.name}? This removes their employee details, barcode, images, and all attendance records. This cannot be undone.`))return;
-    const message=button.closest('#employees-list')?$('employees-message'):$('assignment-message');
-    deletingEmployee=true;button.disabled=true;
+    pendingDeletion=person;deleteTrigger=button;
+    deleteMessage=button.closest('#employees-list')?$('employees-message'):$('assignment-message');
+    $('delete-description').textContent=`Permanently delete ${person.name}? This removes their employee details, barcode, images, and all attendance records. This cannot be undone.`;
+    $('delete-error').textContent='';
+    $('delete-overlay').hidden=false;
+    $('delete-cancel').focus();
+  });
+  $('delete-cancel').addEventListener('click',closeDeletion);
+  $('delete-overlay').addEventListener('keydown',event=>{
+    if(event.key==='Escape'){event.preventDefault();closeDeletion();}
+    if(event.key==='Tab'){
+      event.preventDefault();
+      const next=document.activeElement===$('delete-cancel')?$('delete-confirm'):$('delete-cancel');
+      if(!next.disabled)next.focus();
+    }
+  });
+  $('delete-confirm').addEventListener('click',async()=>{
+    if(!pendingDeletion||deletingEmployee)return;
+    const person=pendingDeletion;
+    deletingEmployee=true;
+    $('delete-confirm').disabled=true;$('delete-cancel').disabled=true;
+    $('delete-confirm').textContent='Deleting…';$('delete-error').textContent='';
     try{
       await api('/api/people/'+person.id+'/delete',{confirm:true});
-      message.textContent=`Deleted ${person.name} and their attendance records.`;
+      state.people=state.people.filter(p=>p.id!==person.id);
+      state.events=state.events.filter(e=>e.person_id!==person.id);
+      deleteMessage.textContent=`Deleted ${person.name} and their attendance records.`;
       $('directory').dispatchEvent(new Event('employee-deleted'));
       $('assign-name').value='';$('assign-barcode').value='';
       $('assign-save').disabled=true;$('assign-generate').disabled=true;
+      directory();allEmployees();
+      $('delete-overlay').hidden=true;pendingDeletion=null;
+      const search=deleteMessage===$('employees-message')?$('employees-search'):$('search');
+      search.focus();
       await refresh();
-    }catch(e){message.textContent=e.message;}
-    finally{deletingEmployee=false;button.disabled=false;}
+    }catch(e){$('delete-error').textContent='Could not delete employee: '+(e.message==='Not found'?'Update app.py from GitHub and restart the Python server, then reload this page.':e.message);}
+    finally{
+      deletingEmployee=false;
+      $('delete-confirm').disabled=false;$('delete-cancel').disabled=false;
+      $('delete-confirm').textContent='Delete permanently';
+    }
   });
 }
