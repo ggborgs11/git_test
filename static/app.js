@@ -17,6 +17,14 @@ function directory() {
   $('directory').innerHTML=people.length?people.map(p=>`<div class="person"><span class="avatar">${esc(initials(p.name))}</span><div class="details"><b>${esc(p.name)}</b><small>${p.barcode?esc(p.barcode):'No barcode assigned'}</small></div>${p.barcode?`<span class="badge ${p.status==='out'?'out':''}">${p.status==='in'?'In':'Out'}</span>`:`<button type="button" class="profile-open" data-assign-id="${p.id}">Assign barcode</button>`}<button type="button" class="secondary" data-delete-id="${p.id}">Delete</button></div>`).join(''):'<p class="empty">No employees found. Add an employee or import a CSV.</p>';
 }
 
+function allEmployees(){
+  const query=$('employees-search').value.trim().toLowerCase();
+  const people=state.people.filter(p=>p.name.toLowerCase().includes(query)||String(p.barcode||'').includes(query))
+    .sort((a,b)=>a.name.localeCompare(b.name)||a.id-b.id);
+  $('employees-count').textContent=`${people.length} of ${state.people.length} employees`;
+  $('employees-list').innerHTML=people.length?people.map(p=>`<div class="person"><div class="details"><b>${esc(p.name)}</b><small>${p.barcode?'Barcode '+esc(p.barcode):'No barcode assigned'}</small></div><button type="button" class="secondary" data-delete-id="${p.id}" aria-label="Delete ${esc(p.name)}">Delete</button></div>`).join(''):'<p class="empty">No employees found.</p>';
+}
+
 function render() {
   $('total').textContent = admin ? state.people.length : state.total;
   $('inside').textContent = admin ? state.people.filter(p=>p.status==='in').length : state.inside;
@@ -24,6 +32,7 @@ function render() {
   $('recent').innerHTML = todayEvents.length ? todayEvents.slice(0,8).map(e=>`<div class="activity"><span class="avatar">${esc(initials(e.name))}</span><div class="details"><b>${esc(e.name)}</b><small>Barcode ${esc(e.barcode)}</small></div><span class="badge ${e.action==='out'?'out':''}">Time ${e.action==='in'?'In':'Out'}</span><time>${time(e.timestamp)}</time></div>`).join('') : '<p class="empty">A fresh start.<br>Today’s scans will appear here.</p>';
   if(!admin) return;
   directory();
+  allEmployees();
 }
 async function refresh() {
   try {
@@ -136,6 +145,7 @@ if(admin) $('print').addEventListener('click',()=>{
   window.print();
 });
 if(admin) $('search').addEventListener('input',directory);
+if(admin) $('employees-search').addEventListener('input',allEmployees);
 
 if(admin) $('logout').addEventListener('click',async()=>{
   try {await api('/api/logout',{});location.replace('/');}
@@ -201,21 +211,22 @@ if(admin){
 
 if(admin){
   let deletingEmployee=false;
-  $('directory').addEventListener('click',async event=>{
+  document.addEventListener('click',async event=>{
     const button=event.target.closest('[data-delete-id]');
     if(!button||deletingEmployee)return;
     const person=state.people.find(p=>p.id===Number(button.dataset.deleteId));
     if(!person)return;
     if(!window.confirm(`Permanently delete ${person.name}? This removes their employee details, barcode, images, and all attendance records. This cannot be undone.`))return;
+    const message=button.closest('#employees-list')?$('employees-message'):$('assignment-message');
     deletingEmployee=true;button.disabled=true;
     try{
       await api('/api/people/'+person.id+'/delete',{confirm:true});
-      $('assignment-message').textContent=`Deleted ${person.name} and their attendance records.`;
+      message.textContent=`Deleted ${person.name} and their attendance records.`;
       $('directory').dispatchEvent(new Event('employee-deleted'));
       $('assign-name').value='';$('assign-barcode').value='';
       $('assign-save').disabled=true;$('assign-generate').disabled=true;
       await refresh();
-    }catch(e){$('assignment-message').textContent=e.message;}
+    }catch(e){message.textContent=e.message;}
     finally{deletingEmployee=false;button.disabled=false;}
   });
 }

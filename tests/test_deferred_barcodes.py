@@ -106,3 +106,11 @@ class DeferredBarcodeAccessTests(HTTPFixture):
             self.assertIsNone(db.execute('SELECT * FROM employee_profiles WHERE person_id=?',(removed['id'],)).fetchone())
             self.assertEqual(list(db.execute('PRAGMA foreign_key_check')),[])
         with self.assertRaises(ValueError):app.scan('123')
+
+    def test_all_employees_tab_is_admin_only(self):
+        self.assertNotIn(b'id="employees-list"',self.request('/')[1])
+        self.assertNotIn(b'id="employees-list"',self.request('/admin')[1])
+        self.request('/api/login',{'password':'test-fixture-password'},self.browser)
+        html=self.request('/admin',browser=self.browser)[1]
+        for marker in [b'data-view="employees"',b'id="employees-search"',b'id="employees-list"',b'class="employee-scroll"']:
+            self.assertIn(marker,html)

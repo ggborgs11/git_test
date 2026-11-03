@@ -77,3 +77,5 @@ main{padding-top:12px}nav{margin-top:0}
 .attendance-filters{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:16px;margin-top:20px;padding:20px}.attendance-filters>div{min-width:0}.attendance-filters label{margin:0 0 8px}.attendance-filters select{width:100%;min-height:46px;padding:10px;border:1px solid #d4ddd3;border-radius:8px;background:white;font:inherit;color:var(--ink)}.attendance-filters select:focus{outline:2px solid #a1bd82;outline-offset:2px}#records-status{font-size:13px;color:var(--muted)}#monthly-summary h3{margin-top:0}a[aria-disabled="true"]{opacity:.5;pointer-events:none}#records .table-wrap h3{margin-top:0}
 @media(max-width:1000px){.attendance-filters{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:480px){.attendance-filters{grid-template-columns:1fr;padding:18px}}
+
+.employee-scroll{max-height:65vh;overflow-y:auto;overscroll-behavior:contain;scrollbar-gutter:stable}.employee-scroll .person{gap:16px}.employee-scroll .details{min-width:0;overflow-wrap:anywhere}.employee-scroll button{flex-shrink:0}
