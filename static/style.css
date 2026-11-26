@@ -83,3 +83,9 @@ main{padding-top:12px}nav{margin-top:0}
 .delete-overlay{position:fixed;inset:0;z-index:1000;background:#0008;display:flex;align-items:center;justify-content:center;padding:20px}.delete-confirmation{width:min(100%,520px);max-height:90vh;overflow:auto}.delete-confirmation h2{margin-top:0}.delete-confirmation p{overflow-wrap:anywhere;line-height:1.6}#delete-confirm{background:#a33c26}#delete-error{color:#a33c26}
 
 .employee-select{width:20px;height:20px;flex-shrink:0}#bulk-department-form{margin:20px 0}#bulk-department-form .primary{width:auto}
+
+/* Attendance summary table: paired scans, in chronological date order. */
+.attendance-summary-table th{text-align:left;vertical-align:bottom;padding-bottom:12px}
+.attendance-summary-table th.time-group{text-align:center}
+.attendance-summary-table td{font-variant-numeric:tabular-nums}
+.attendance-summary-table th[rowspan="2"]{vertical-align:bottom}
