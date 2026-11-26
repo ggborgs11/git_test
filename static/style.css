@@ -89,3 +89,18 @@ main{padding-top:12px}nav{margin-top:0}
 .attendance-summary-table th.time-group{text-align:center}
 .attendance-summary-table td{font-variant-numeric:tabular-nums}
 .attendance-summary-table th[rowspan="2"]{vertical-align:bottom}
+
+
+/* Attendance summary: a names-only employee rail beside the records. */
+.attendance-layout{display:grid;grid-template-columns:245px minmax(0,1fr);gap:18px;align-items:start;margin-top:16px}
+.attendance-employee-panel{padding:18px 12px;min-width:0}
+.attendance-employee-panel h3{font-size:14px;margin:2px 8px 12px}
+.attendance-employee-list{max-height:68vh;overflow-y:auto;overscroll-behavior:contain}
+.attendance-employee-name{display:block;width:100%;padding:9px 10px;text-align:left;border-radius:4px;font:inherit;font-size:12px;color:var(--ink);overflow-wrap:anywhere}
+.attendance-employee-name:hover{background:#f1f4ed}
+.attendance-employee-name.selected{background:#245e46;color:#fff}
+.attendance-results{min-width:0}
+.attendance-results>.table-wrap{margin-top:0}
+.attendance-results #monthly-summary{margin-bottom:18px}
+@media(max-width:760px){.attendance-layout{grid-template-columns:1fr}.attendance-employee-list{max-height:220px;columns:2;column-gap:8px}.attendance-employee-name{break-inside:avoid}}
+@media(max-width:420px){.attendance-employee-list{columns:1}}
