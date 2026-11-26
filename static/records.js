@@ -35,9 +35,10 @@ function renderAttendance(data){
     $('monthly-heading').textContent=`${data.employee.sort_name} · ${data.period} · ${data.employee.department||'No department assigned'}`;
     $('monthly-body').innerHTML=data.days.map(day=>`<tr><td>${esc(day.date)}</td><td>${day.first_in?time(day.first_in):'—'}</td><td>${day.last_out?time(day.last_out):'—'}</td><td>${day.scans||'No scans'}</td></tr>`).join('');
   }
-  $('records-body').innerHTML=data.records.map(r=>`<tr><td>${esc(r.date)}</td><td>${esc(r.name)}</td><td>${esc(r.department||'Not assigned')}</td><td>${esc(r.barcode||'—')}</td><td><span class="badge ${r.action==='out'?'out':''}">Time ${r.action==='in'?'In':'Out'}</span></td><td>${time(r.timestamp)}</td></tr>`).join('');
-  $('records-empty').hidden=data.records.length>0;
-  $('records-status').textContent=`${data.records.length} scan${data.records.length===1?'':'s'} · ${data.period}${data.employee?' · '+data.employee.sort_name:''}`;
+  const rows=data.attendance_rows||[];
+  $('records-body').innerHTML=rows.map(r=>`<tr><td>${esc(r.date)}</td><td>${esc(r.name)}</td><td>${r.time_in?time(r.time_in):'—'}</td><td>${r.time_out?time(r.time_out):'—'}</td></tr>`).join('');
+  $('records-empty').hidden=rows.length>0;
+  $('records-status').textContent=`${rows.length} attendance row${rows.length===1?'':'s'} · ${data.period}${data.employee?' · '+data.employee.sort_name:''}`;
   $('timezone').textContent=`Times shown in ${zone}. Departments use existing employee data.`;
   const params=attendanceQuery();
   $('export-log').href='/api/attendance/export?'+params.toString();

@@ -68,7 +68,26 @@ def report(db, local, query):
         stamp=datetime.fromisoformat(row['timestamp']).astimezone(local)
         records.append({'id':row['id'],'person_id':person['id'],'name':person['sort_name'],'barcode':person['barcode'],
                         'department':person['department'],'action':row['action'],'timestamp':row['timestamp'],'date':stamp.strftime('%Y-%m-%d')})
-    # Stable grouping retains newest-first order within each employee.
+    # Build a chronological attendance view without discarding repeated scans.
+    # Each Time In is paired with the next Time Out for that employee on that date.
+    pending={}
+    attendance_rows=[]
+    for record in sorted(records,key=lambda r:(r['timestamp'],r['id'])):
+        key=(record['date'],record['person_id'])
+        current=pending.get(key)
+        if record['action']=='in':
+            if current:
+                attendance_rows.append({**current,'time_out':None})
+            pending[key]={**record,'time_in':record['timestamp'],'time_out':None}
+        elif current:
+            attendance_rows.append({**current,'time_out':record['timestamp']})
+            pending.pop(key,None)
+        else:
+            attendance_rows.append({**record,'time_in':None,'time_out':record['timestamp']})
+    attendance_rows.extend({**row,'time_out':None} for row in pending.values())
+    attendance_rows.sort(key=lambda r:(r['date'],r['name'].casefold(),r['person_id'],
+                                       r['time_in'] or r['time_out'] or ''))
+    # The detailed scan export keeps its existing sort options.
     if sort=='department':records.sort(key=lambda r:(r['department'].casefold(),r['name'].casefold(),r['person_id']))
     elif sort=='person':records.sort(key=lambda r:(r['name'].casefold(),r['person_id']))
     elif sort=='last_name':
@@ -84,7 +103,7 @@ def report(db, local, query):
             ins=[r['timestamp'] for r in scans if r['action']=='in'];outs=[r['timestamp'] for r in scans if r['action']=='out']
             days.append({'date':date,'first_in':min(ins) if ins else None,'last_out':max(outs) if outs else None,'scans':len(scans)})
             current+=timedelta(days=1)
-    return {'records':records,'days':days,'people':people,'departments':sorted({p['department'] for p in people},key=str.casefold),
+    return {'records':records,'attendance_rows':attendance_rows,'days':days,'people':people,'departments':sorted({p['department'] for p in people},key=str.casefold),
             'employee':selected,'timezone':str(local),'today':datetime.now(local).strftime('%Y-%m-%d'),
             'period':f'{first} to {last}' if range_requested else month or day,'mode':'range' if range_requested else 'month' if month else 'day','sort':sort}
 
