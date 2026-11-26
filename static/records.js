@@ -26,8 +26,15 @@ function populateAttendanceFilters(data){
   $('records-person').innerHTML='<option value="">All employees</option>'+people.map(p=>`<option value="${p.id}">${esc(p.sort_name)}${p.barcode?' · '+esc(p.barcode):''}</option>`).join('');
   $('records-person').value=people.some(p=>String(p.id)===selected)?selected:'';
 }
+function renderEmployeeList(data){
+  const department=$('records-department').value;
+  const selected=$('records-person').value;
+  const people=data.people.filter(p=>!department||p.department===department.slice(2));
+  $('records-employees').innerHTML=people.map(p=>`<button type="button" class="attendance-employee-name${String(p.id)===selected?' selected':''}" data-person-id="${p.id}" aria-pressed="${String(p.id)===selected}">${esc(p.sort_name)}</button>`).join('');
+}
 function renderAttendance(data){
   populateAttendanceFilters(data);
+  renderEmployeeList(data);
   const monthly=data.mode==='month'&&data.employee;
   $('monthly-summary').hidden=!monthly;
   $('export-log').hidden=!monthly;
@@ -76,7 +83,10 @@ if(admin){
     if(attendanceReport)populateAttendanceFilters(attendanceReport);
     refreshAttendance();
   });
-  $('records-person').addEventListener('change',()=>{
+  $('records-employees').addEventListener('click',event=>{
+    const button=event.target.closest('[data-person-id]');
+    if(!button)return;
+    $('records-person').value=button.dataset.personId===$('records-person').value?'':button.dataset.personId;
     refreshAttendance();
   });
   for(const id of ['date','records-month','records-start','records-end','records-sort'])$(id).addEventListener('change',refreshAttendance);
